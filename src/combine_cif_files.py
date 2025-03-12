@@ -355,39 +355,33 @@ def create_pse_files(unique_names, chai_dir, boltz_dir, template_file, model_idx
     # Return the RMSD values, reference name, and template directory
     return rmsd_values, reference_name, template_dir
 
-def main():
-    """Main function."""
-    args = parse_arguments()
+def get_templates(config, args):
+    """Get all template files from configuration or command line arguments."""
+    if args.template:
+        return [Path(args.template)]
+    elif "files" in config["templates"]:
+        return [Path(template) for template in config["templates"]["files"]]
+    elif "default_template" in config["templates"]:
+        return [Path(config["templates"]["default_template"])]
+    return []
+
+def process_template(template_file, unique_names, chai_dir, boltz_dir, model_idx, output_dir, csv_dir, config, quiet=False):
+    """Process a single template file."""
+    if not template_file.exists():
+        print(f"Template file {template_file} does not exist.")
+        return False
     
-    # Load configuration
-    config = config_loader.load_config()
-    config = config_loader.update_config_from_args(config, args)
-    
-    # Get directories and template file from config
-    chai_dir = Path(config["directories"]["chai_output"])
-    boltz_dir = Path(config["directories"]["boltz_output"])
-    output_dir = Path(config["directories"]["pse_files"])
-    template_file = Path(config["templates"]["default_template"])
-    model_idx = config["templates"]["model_idx"]
-    
-    # Find unique names
-    unique_names = find_unique_names(chai_dir, boltz_dir, config, args.quiet)
-    
-    if not unique_names:
-        print("No unique names found. Please check if the directories exist and contain data.")
-        return
-    
-    # Create csv directory if it doesn't exist
-    csv_dir = Path(config["directories"]["csv"])
-    if not csv_dir.exists():
-        csv_dir.mkdir()
-        if not args.quiet:
-            print(f"Created directory: {csv_dir}")
+    if not quiet:
+        print(f"\nProcessing template: {template_file}")
     
     # Create PSE files and get RMSD values, reference name, and template directory
     rmsd_values, reference_name, template_dir = create_pse_files(
-        unique_names, chai_dir, boltz_dir, template_file, model_idx, output_dir, config, args.quiet
+        unique_names, chai_dir, boltz_dir, template_file, model_idx, output_dir, config, quiet
     )
+    
+    if not rmsd_values:
+        print(f"No RMSD values generated for template {template_file}.")
+        return False
     
     # Write RMSD values to CSV with reference protein name in both locations
     # 1. In the template directory (for backward compatibility)
@@ -404,8 +398,59 @@ def main():
         for entry in rmsd_values:
             f.write(f"{entry['ligand']},{entry['method']},{entry['rmsd']},{reference_name}\n")
     
-    print(f"All PSE files created successfully!")
-    print(f"RMSD values saved to {pse_csv_file} and {csv_file}")
+    if not quiet:
+        print(f"RMSD values saved to {pse_csv_file} and {csv_file}")
+    
+    return True
+
+def main():
+    """Main function."""
+    args = parse_arguments()
+    
+    # Load configuration
+    config = config_loader.load_config()
+    config = config_loader.update_config_from_args(config, args)
+    
+    # Get directories from config
+    chai_dir = Path(config["directories"]["chai_output"])
+    boltz_dir = Path(config["directories"]["boltz_output"])
+    output_dir = Path(config["directories"]["pse_files"])
+    model_idx = config["templates"]["model_idx"]
+    
+    # Find unique names
+    unique_names = find_unique_names(chai_dir, boltz_dir, config, args.quiet)
+    
+    if not unique_names:
+        print("No unique names found. Please check if the directories exist and contain data.")
+        return
+    
+    # Create csv directory if it doesn't exist
+    csv_dir = Path(config["directories"]["csv"])
+    if not csv_dir.exists():
+        csv_dir.mkdir()
+        if not args.quiet:
+            print(f"Created directory: {csv_dir}")
+    
+    # Get all templates from configuration or command line arguments
+    templates = get_templates(config, args)
+    if not templates:
+        print("No templates found in configuration or command line arguments.")
+        return
+    
+    if not args.quiet:
+        print(f"Found {len(templates)} templates: {', '.join(str(t) for t in templates)}")
+    
+    # Process each template
+    templates_processed = 0
+    for template_file in templates:
+        if process_template(template_file, unique_names, chai_dir, boltz_dir, model_idx, output_dir, csv_dir, config, args.quiet):
+            templates_processed += 1
+    
+    if templates_processed > 0:
+        print(f"Successfully processed {templates_processed} out of {len(templates)} templates.")
+        print(f"All PSE files created successfully!")
+    else:
+        print("No templates were successfully processed.")
 
 if __name__ == "__main__":
     main()

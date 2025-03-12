@@ -42,18 +42,39 @@ def parse_arguments():
     
     return parser.parse_args()
 
-def find_rmsd_csv_files(pse_dir):
-    """Find all rmsd_values.csv files in PSE_FILES subdirectories."""
+def get_templates(config):
+    """Get all template files from configuration."""
+    if "files" in config["templates"]:
+        return [Path(template) for template in config["templates"]["files"]]
+    elif "default_template" in config["templates"]:
+        return [Path(config["templates"]["default_template"])]
+    return []
+
+def find_rmsd_csv_files(pse_dir, template_name=None):
+    """Find all rmsd_values.csv files in PSE_FILES subdirectories.
+    
+    If template_name is provided, only look for CSV files in that template's subdirectory.
+    """
     if not pse_dir.exists() or not pse_dir.is_dir():
         print(f"{pse_dir} directory not found.")
         return []
     
     csv_files = []
-    for subdir in pse_dir.iterdir():
-        if subdir.is_dir():
-            csv_file = subdir / 'rmsd_values.csv'
+    
+    if template_name:
+        # Look for CSV files in the specific template subdirectory
+        template_dir = pse_dir / template_name
+        if template_dir.exists() and template_dir.is_dir():
+            csv_file = template_dir / 'rmsd_values.csv'
             if csv_file.exists():
                 csv_files.append(csv_file)
+    else:
+        # Look for CSV files in all subdirectories
+        for subdir in pse_dir.iterdir():
+            if subdir.is_dir():
+                csv_file = subdir / 'rmsd_values.csv'
+                if csv_file.exists():
+                    csv_files.append(csv_file)
     
     return csv_files
 
@@ -160,6 +181,70 @@ def create_heatmap(df, output_file, config, quiet=False):
         print(f"Error creating heatmap: {e}")
         return False
 
+def process_template(template_name, config, args, plots_dir, csv_dir):
+    """Process RMSD data for a specific template."""
+    if not args.quiet:
+        print(f"\nProcessing template: {template_name}")
+    
+    # Determine input file(s)
+    if args.input:
+        # Use specified input file
+        input_files = [Path(args.input)]
+        if not input_files[0].exists():
+            print(f"Input file {input_files[0]} does not exist.")
+            return False
+    else:
+        # Auto-detect input files for this template
+        pse_dir = Path(config["directories"]["pse_files"])
+        input_files = find_rmsd_csv_files(pse_dir, template_name)
+        if not input_files:
+            print(f"No RMSD CSV files found for template {template_name} in {pse_dir} subdirectories.")
+            return False
+        if not args.quiet:
+            print(f"Found {len(input_files)} RMSD CSV files for template {template_name}: {', '.join(str(f) for f in input_files)}")
+    
+    # Process each input file
+    for input_file in input_files:
+        # Read RMSD values
+        df = read_rmsd_values(input_file, args.quiet)
+        if df is None:
+            continue
+        
+        # Filter by reference if specified
+        if args.reference and 'reference' in df.columns:
+            df = df[df['reference'] == args.reference]
+            if len(df) == 0:
+                print(f"No data found for reference '{args.reference}' in {input_file}")
+                continue
+        
+        # Determine output file
+        if args.output:
+            output_file = Path(args.output)
+        else:
+            # Get reference name for the filename
+            reference_name = template_name
+            if 'reference' in df.columns and not df['reference'].empty:
+                reference_name = df['reference'].iloc[0]
+            
+            # Save in plots directory
+            output_file = plots_dir / f'rmsd_heatmap_{reference_name}.png'
+        
+        # Create heatmap
+        success = create_heatmap(df, output_file, config, args.quiet)
+        
+        if success:
+            # Save the data to CSV for further analysis
+            csv_file = csv_dir / f'rmsd_values_{reference_name}.csv'
+            df.to_csv(csv_file)
+            if not args.quiet:
+                print(f"Data saved to {csv_file}")
+                print(f"Heatmap created successfully: {output_file}")
+            return True
+        else:
+            print(f"Failed to create heatmap for {input_file}")
+    
+    return False
+
 def main():
     """Main function."""
     args = parse_arguments()
@@ -182,61 +267,26 @@ def main():
         if not args.quiet:
             print(f"Created directory: {csv_dir}")
     
-    # Determine input file(s)
-    if args.input:
-        # Use specified input file
-        input_files = [Path(args.input)]
-        if not input_files[0].exists():
-            print(f"Input file {input_files[0]} does not exist.")
-            return
-    else:
-        # Auto-detect input files
-        pse_dir = Path(config["directories"]["pse_files"])
-        input_files = find_rmsd_csv_files(pse_dir)
-        if not input_files:
-            print(f"No RMSD CSV files found in {pse_dir} subdirectories.")
-            return
-        if not args.quiet:
-            print(f"Found {len(input_files)} RMSD CSV files: {', '.join(str(f) for f in input_files)}")
+    # Get all templates from configuration
+    templates = get_templates(config)
+    if not templates:
+        print("No templates found in configuration.")
+        return
     
-    # Process each input file
-    for input_file in input_files:
-        # Read RMSD values
-        df = read_rmsd_values(input_file, args.quiet)
-        if df is None:
-            continue
-        
-        # Filter by reference if specified
-        if args.reference and 'reference' in df.columns:
-            df = df[df['reference'] == args.reference]
-            if len(df) == 0:
-                print(f"No data found for reference '{args.reference}' in {input_file}")
-                continue
-        
-        # Determine output file
-        if args.output:
-            output_file = Path(args.output)
-        else:
-            # Get reference name for the filename
-            reference_name = "Unknown"
-            if 'reference' in df.columns and not df['reference'].empty:
-                reference_name = df['reference'].iloc[0]
-            
-            # Save in plots directory
-            output_file = plots_dir / f'rmsd_heatmap_{reference_name}.png'
-        
-        # Create heatmap
-        success = create_heatmap(df, output_file, config, args.quiet)
-        
-        if success:
-            # Save the data to CSV for further analysis
-            csv_file = csv_dir / f'rmsd_values_{reference_name}.csv'
-            df.to_csv(csv_file)
-            if not args.quiet:
-                print(f"Data saved to {csv_file}")
-                print(f"Heatmap created successfully: {output_file}")
-        elif not success:
-            print(f"Failed to create heatmap for {input_file}")
+    if not args.quiet:
+        print(f"Found {len(templates)} templates: {', '.join(str(t) for t in templates)}")
+    
+    # Process each template
+    templates_processed = 0
+    for template in templates:
+        template_name = template.stem
+        if process_template(template_name, config, args, plots_dir, csv_dir):
+            templates_processed += 1
+    
+    if templates_processed > 0:
+        print(f"Successfully processed {templates_processed} out of {len(templates)} templates.")
+    else:
+        print("No templates were successfully processed.")
 
 if __name__ == "__main__":
     main()

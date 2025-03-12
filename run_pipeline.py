@@ -165,9 +165,12 @@ def main():
         f"--chai-output={config['directories']['chai_output']}",
         f"--boltz-output={config['directories']['boltz_output']}",
         f"--pse-files={config['directories']['pse_files']}",
-        f"--template={config['templates']['default_template']}",
         f"--model-idx={config['templates']['model_idx']}"
     ]
+    
+    # Add template if specified in command line
+    if args.template:
+        combine_cif_cmd.append(f"--template={args.template}")
     
     # Add method options
     if not config["methods"]["use_chai"]:
