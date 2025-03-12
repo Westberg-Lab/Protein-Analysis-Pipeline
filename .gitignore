@@ -1,0 +1,56 @@
+# Output directories
+CHAI_FASTA/
+BOLTZ_YAML/
+OUTPUT/
+PSE_FILES/
+plots/
+
+# Archive directories
+archive_*/
+
+# Generated data files
+*.png
+*.csv
+*.pse
+*.yaml
+*.fasta
+
+# Generated MSA files
+*.pqt
+
+# JSON files - ignore all except molecules.json
+*.json
+!molecules_example.json
+
+# CIF files - ignore all except reference files in root directory
+*.cif
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS specific files
+.DS_Store
+Thumbs.db
