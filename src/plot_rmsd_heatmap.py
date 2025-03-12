@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Script to generate a heatmap visualization of RMSD values.
 
@@ -8,10 +9,13 @@ This script reads RMSD values from a CSV file and creates a heatmap with:
 
 Usage:
     python plot_rmsd_heatmap.py [--input INPUT_CSV] [--output OUTPUT_PNG]
+                               [--reference REFERENCE] [--quiet]
 
 Options:
-    --input INPUT_CSV    Input CSV file with RMSD values (default: rmsd_values.csv)
-    --output OUTPUT_PNG  Output PNG file for the heatmap (default: rmsd_heatmap.png)
+    --input INPUT_CSV    Input CSV file with RMSD values (default: auto-detect in PSE_FILES subdirectories)
+    --output OUTPUT_PNG  Output PNG file for the heatmap (default: plots/rmsd_heatmap_[reference].png)
+    --reference REF      Reference name to filter by (default: use all references)
+    --quiet              Suppress detailed output
 """
 
 import argparse
@@ -19,6 +23,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
+import config_loader
 
 def parse_arguments():
     """Parse command line arguments."""
@@ -26,16 +31,21 @@ def parse_arguments():
     parser.add_argument('--input', type=str, default=None,
                         help='Input CSV file with RMSD values (default: auto-detect in PSE_FILES subdirectories)')
     parser.add_argument('--output', type=str, default=None,
-                        help='Output PNG file for the heatmap (default: same directory as input with name rmsd_heatmap.png)')
+                        help='Output PNG file for the heatmap (default: plots/rmsd_heatmap_[reference].png)')
     parser.add_argument('--reference', type=str, default=None,
                         help='Reference name to filter by (default: use all references)')
+    parser.add_argument('--quiet', action='store_true',
+                        help='Suppress detailed output')
+    
+    # Add common arguments
+    parser = config_loader.add_common_args(parser)
+    
     return parser.parse_args()
 
-def find_rmsd_csv_files():
+def find_rmsd_csv_files(pse_dir):
     """Find all rmsd_values.csv files in PSE_FILES subdirectories."""
-    pse_dir = Path('PSE_FILES')
     if not pse_dir.exists() or not pse_dir.is_dir():
-        print(f"PSE_FILES directory not found.")
+        print(f"{pse_dir} directory not found.")
         return []
     
     csv_files = []
@@ -47,17 +57,18 @@ def find_rmsd_csv_files():
     
     return csv_files
 
-def read_rmsd_values(csv_file):
+def read_rmsd_values(csv_file, quiet=False):
     """Read RMSD values from CSV file."""
     try:
         df = pd.read_csv(csv_file)
-        print(f"Read {len(df)} RMSD values from {csv_file}")
+        if not quiet:
+            print(f"Read {len(df)} RMSD values from {csv_file}")
         return df
     except Exception as e:
         print(f"Error reading CSV file: {e}")
         return None
 
-def create_heatmap(df, output_file):
+def create_heatmap(df, output_file, config, quiet=False):
     """Create a heatmap visualization of RMSD values."""
     # Check if DataFrame is valid
     if df is None or len(df) == 0:
@@ -81,9 +92,29 @@ def create_heatmap(df, output_file):
     try:
         pivot_df = df.pivot(index='ligand', columns='method', values='rmsd')
         
-        # Sort the methods in the desired order
-        method_order = ['chai', 'chai_with_MSA', 'boltz', 'boltz_with_MSA']
-        pivot_df = pivot_df.reindex(columns=method_order)
+        # Determine available methods based on configuration and data
+        available_methods = []
+        all_methods = ['chai', 'chai_with_MSA', 'boltz', 'boltz_with_MSA']
+        
+        # Filter methods based on configuration
+        if not config["methods"]["use_chai"]:
+            all_methods = [m for m in all_methods if not m.startswith('chai')]
+        if not config["methods"]["use_boltz"]:
+            all_methods = [m for m in all_methods if not m.startswith('boltz')]
+        if not config["methods"]["use_msa"]:
+            all_methods = [m for m in all_methods if not '_with_MSA' in m]
+        
+        # Filter methods based on available data
+        for method in all_methods:
+            if method in pivot_df.columns:
+                available_methods.append(method)
+        
+        if not available_methods:
+            print("No methods available for visualization.")
+            return False
+        
+        # Reindex with available methods
+        pivot_df = pivot_df.reindex(columns=available_methods)
         
         # Sort the ligands (rows) alphabetically
         pivot_df = pivot_df.sort_index()
@@ -95,13 +126,13 @@ def create_heatmap(df, output_file):
         # This is intuitive for RMSD values: green for good alignments (low RMSD),
         # yellow for medium, red for poor alignments (high RMSD)
         
-        # Apply logarithmic normalization to better visualize small differences
+        # Apply normalization to better visualize small differences
         from matplotlib.colors import Normalize
         
-        vmin = 0.2
-        vmax = 6.2
+        vmin = config["visualization"]["rmsd_vmin"]
+        vmax = config["visualization"]["rmsd_vmax"]
         
-        # Create the heatmap with seaborn using the natural colormap and log normalization
+        # Create the heatmap with seaborn using the natural colormap and normalization
         ax = sns.heatmap(pivot_df, annot=True, cmap='RdYlGn_r', fmt='.4f', 
                      norm=Normalize(vmin=vmin, vmax=vmax),
                      cbar_kws={'label': 'RMSD (Å)'})
@@ -121,7 +152,8 @@ def create_heatmap(df, output_file):
         plt.savefig(output_file, dpi=300, bbox_inches='tight')
         plt.close()
         
-        print(f"Heatmap saved to {output_file}")
+        if not quiet:
+            print(f"Heatmap saved to {output_file}")
         return True
     
     except Exception as e:
@@ -132,11 +164,23 @@ def main():
     """Main function."""
     args = parse_arguments()
     
+    # Load configuration
+    config = config_loader.load_config()
+    config = config_loader.update_config_from_args(config, args)
+    
     # Create plots directory if it doesn't exist
-    plots_dir = Path('plots')
+    plots_dir = Path(config["directories"]["plots"])
     if not plots_dir.exists():
         plots_dir.mkdir()
-        print(f"Created directory: {plots_dir}")
+        if not args.quiet:
+            print(f"Created directory: {plots_dir}")
+    
+    # Create csv directory if it doesn't exist
+    csv_dir = Path(config["directories"]["csv"])
+    if not csv_dir.exists():
+        csv_dir.mkdir()
+        if not args.quiet:
+            print(f"Created directory: {csv_dir}")
     
     # Determine input file(s)
     if args.input:
@@ -147,16 +191,18 @@ def main():
             return
     else:
         # Auto-detect input files
-        input_files = find_rmsd_csv_files()
+        pse_dir = Path(config["directories"]["pse_files"])
+        input_files = find_rmsd_csv_files(pse_dir)
         if not input_files:
-            print("No RMSD CSV files found in PSE_FILES subdirectories.")
+            print(f"No RMSD CSV files found in {pse_dir} subdirectories.")
             return
-        print(f"Found {len(input_files)} RMSD CSV files: {', '.join(str(f) for f in input_files)}")
+        if not args.quiet:
+            print(f"Found {len(input_files)} RMSD CSV files: {', '.join(str(f) for f in input_files)}")
     
     # Process each input file
     for input_file in input_files:
         # Read RMSD values
-        df = read_rmsd_values(input_file)
+        df = read_rmsd_values(input_file, args.quiet)
         if df is None:
             continue
         
@@ -180,11 +226,16 @@ def main():
             output_file = plots_dir / f'rmsd_heatmap_{reference_name}.png'
         
         # Create heatmap
-        success = create_heatmap(df, output_file)
+        success = create_heatmap(df, output_file, config, args.quiet)
         
         if success:
-            print(f"Heatmap created successfully: {output_file}")
-        else:
+            # Save the data to CSV for further analysis
+            csv_file = csv_dir / f'rmsd_values_{reference_name}.csv'
+            df.to_csv(csv_file)
+            if not args.quiet:
+                print(f"Data saved to {csv_file}")
+                print(f"Heatmap created successfully: {output_file}")
+        elif not success:
             print(f"Failed to create heatmap for {input_file}")
 
 if __name__ == "__main__":

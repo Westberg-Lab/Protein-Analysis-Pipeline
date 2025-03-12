@@ -1,0 +1,29 @@
+{
+  "directories": {
+    "chai_fasta": "CHAI_FASTA",
+    "boltz_yaml": "BOLTZ_YAML",
+    "chai_output": "OUTPUT/CHAI",
+    "boltz_output": "OUTPUT/BOLTZ",
+    "pse_files": "PSE_FILES",
+    "plots": "plots",
+    "csv": "csv"
+  },
+  "methods": {
+    "use_chai": true,
+    "use_boltz": true,
+    "use_msa": true,
+    "use_msa_dir": false
+  },
+  "templates": {
+    "files": [
+      "KOr_w_momSalB.cif",
+      "KOr_w_dynorphin.cif",
+      "kOR_Inactive(8mqk)_9MQK.cif"
+    ],
+    "model_idx": 4
+  },
+  "visualization": {
+    "rmsd_vmin": 0.2,
+    "rmsd_vmax": 6.2
+  }
+}

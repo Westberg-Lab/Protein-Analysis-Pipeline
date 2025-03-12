@@ -21,6 +21,7 @@ archive_*/
 # JSON files - ignore all except molecules.json
 *.json
 !molecules_example.json
+!pipeline_config.json
 
 # CIF files - ignore all except reference files in root directory
 *.cif
