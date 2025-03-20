@@ -18,12 +18,32 @@
     "visualization": {
       "rmsd_vmin": 0.2,
       "rmsd_vmax": 6.2
+    },
+    "motifs": {
+      "definitions": [
+        {
+          "id": "binding_pocket",
+          "description": "Ligand binding pocket residues",
+          "molecules": ["hM1Dshort_8E9X", "hM3Dshort_8E9W", "hM4Dshort_8E9X"],
+          "residues": [45, 46, 47, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100],
+          "chain": "A",
+          "color": "magenta"
+        },
+        {
+          "id": "active_site",
+          "description": "Catalytic active site",
+          "molecules": ["hM1Dshort_8E9X", "hM3Dshort_8E9W", "hM4Dshort_8E9X"],
+          "residues": [120, 121, 122, 123, 124, 125],
+          "chain": "A",
+          "color": "cyan"
+        }
+      ]
     }
   },
-  "configurations": [
+  "prediction_runs": [
     {
       "id": "standard",
-      "description": "Standard run without MSA",
+      "description": "Standard prediction without MSA",
       "enabled": true,
       "methods": {
         "use_chai": true,
@@ -34,7 +54,7 @@
     },
     {
       "id": "with_msa",
-      "description": "Run with MSA enabled",
+      "description": "Prediction with MSA enabled",
       "enabled": true,
       "methods": {
         "use_chai": true,
@@ -42,6 +62,33 @@
         "use_msa": true,
         "use_msa_dir": false
       }
+    }
+  ],
+  "analysis_runs": [
+    {
+      "id": "whole_protein",
+      "description": "Standard whole protein analysis",
+      "enabled": true,
+      "source_predictions": ["standard", "with_msa"],
+      "analysis_type": "whole_protein"
+    },
+    {
+      "id": "binding_pocket_analysis",
+      "description": "Binding pocket motif analysis",
+      "enabled": true,
+      "source_predictions": ["standard", "with_msa"],
+      "analysis_type": "motif",
+      "motif_id": "binding_pocket",
+      "metrics": ["rmsd", "plddt"]
+    },
+    {
+      "id": "active_site_analysis",
+      "description": "Active site motif analysis",
+      "enabled": true,
+      "source_predictions": ["standard", "with_msa"],
+      "analysis_type": "motif",
+      "motif_id": "active_site",
+      "metrics": ["rmsd", "plddt"]
     }
   ]
 }

@@ -38,16 +38,20 @@ def parse_arguments():
 
 def find_unique_names(chai_dir, boltz_dir, config, quiet=False):
     """Find all unique directory names that exist in both CHAI and BOLTZ outputs."""
+    # Get default method values if not present in config
+    use_chai = config.get("methods", {}).get("use_chai", True)
+    use_boltz = config.get("methods", {}).get("use_boltz", True)
+    
     # Get all directory names in CHAI (excluding _with_MSA directories)
     chai_dirs = set()
-    if config["methods"]["use_chai"] and chai_dir.exists():
+    if use_chai and chai_dir.exists():
         for d in chai_dir.iterdir():
             if d.is_dir() and not d.name.endswith('_with_MSA'):
                 chai_dirs.update(subdir.name for subdir in d.iterdir() if subdir.is_dir())
     
     # Get all directory names in BOLTZ (excluding _with_MSA directories)
     boltz_dirs = set()
-    if config["methods"]["use_boltz"] and boltz_dir.exists():
+    if use_boltz and boltz_dir.exists():
         for d in boltz_dir.iterdir():
             if d.is_dir() and not d.name.endswith('_with_MSA'):
                 # Extract base names from boltz_results_ prefix
@@ -56,11 +60,11 @@ def find_unique_names(chai_dir, boltz_dir, config, quiet=False):
                                 if subdir.is_dir() and subdir.name.startswith('boltz_results_'))
     
     # Find common names if both CHAI and BOLTZ are used
-    if config["methods"]["use_chai"] and config["methods"]["use_boltz"]:
+    if use_chai and use_boltz:
         unique_names = chai_dirs.intersection(boltz_dirs)
-    elif config["methods"]["use_chai"]:
+    elif use_chai:
         unique_names = chai_dirs
-    elif config["methods"]["use_boltz"]:
+    elif use_boltz:
         unique_names = boltz_dirs
     else:
         unique_names = set()
@@ -359,10 +363,21 @@ def get_templates(config, args):
     """Get all template files from configuration or command line arguments."""
     if args.template:
         return [Path(args.template)]
-    elif "files" in config["templates"]:
-        return [Path(template) for template in config["templates"]["files"]]
-    elif "default_template" in config["templates"]:
-        return [Path(config["templates"]["default_template"])]
+    
+    # Handle both old and new configuration structures
+    if "templates" in config:
+        # Old configuration structure
+        if "files" in config["templates"]:
+            return [Path(template) for template in config["templates"]["files"]]
+        elif "default_template" in config["templates"]:
+            return [Path(config["templates"]["default_template"])]
+    else:
+        # New configuration structure
+        if "files" in config:
+            return [Path(template) for template in config["files"]]
+        elif "default_template" in config:
+            return [Path(config["default_template"])]
+    
     return []
 
 def process_template(template_file, unique_names, chai_dir, boltz_dir, model_idx, output_dir, csv_dir, config, quiet=False):
@@ -412,10 +427,25 @@ def main():
     config = config_loader.update_config_from_args(config, args)
     
     # Get directories from config
-    chai_dir = Path(config["directories"]["chai_output"])
-    boltz_dir = Path(config["directories"]["boltz_output"])
-    output_dir = Path(config["directories"]["pse_files"])
-    model_idx = config["templates"]["model_idx"]
+    # Handle both old and new configuration structures
+    if "directories" in config:
+        # Old configuration structure
+        chai_dir = Path(config["directories"]["chai_output"])
+        boltz_dir = Path(config["directories"]["boltz_output"])
+        output_dir = Path(config["directories"]["pse_files"])
+        csv_dir = Path(config["directories"]["csv"])
+    else:
+        # New configuration structure
+        chai_dir = Path(config.get("chai_output", "OUTPUT/CHAI"))
+        boltz_dir = Path(config.get("boltz_output", "OUTPUT/BOLTZ"))
+        output_dir = Path(config.get("pse_files", "PSE_FILES"))
+        csv_dir = Path(config.get("csv", "csv"))
+    
+    # Get model index from config
+    if "templates" in config:
+        model_idx = config["templates"]["model_idx"]
+    else:
+        model_idx = config.get("model_idx", 4)
     
     # Find unique names
     unique_names = find_unique_names(chai_dir, boltz_dir, config, args.quiet)
@@ -425,7 +455,6 @@ def main():
         return
     
     # Create csv directory if it doesn't exist
-    csv_dir = Path(config["directories"]["csv"])
     if not csv_dir.exists():
         csv_dir.mkdir()
         if not args.quiet:

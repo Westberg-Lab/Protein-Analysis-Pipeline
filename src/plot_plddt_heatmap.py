@@ -34,6 +34,8 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='Generate a heatmap of pLDDT values.')
     parser.add_argument('--output', type=str, default=None,
                         help='Output PNG file for the heatmap (default: plots/plddt_heatmap.png)')
+    parser.add_argument('--analysis-run', type=str, default=None,
+                        help='Analysis run ID to use (default: first enabled analysis run)')
     
     # Add common arguments (which includes --quiet)
     parser = config_loader.add_common_args(parser)
@@ -158,7 +160,7 @@ def extract_boltz_plddt(file_path):
         print(f"Error extracting complex_plddt from BOLTZ file {file_path}: {e}")
         return None
 
-def organize_data(chai_files, boltz_files, chai_dir, boltz_dir, config):
+def organize_data(chai_files, boltz_files, chai_dir, boltz_dir, prediction_runs, quiet=False):
     """Extract and organize complex_plddt values from both CHAI and BOLTZ files.
     
     Organizes data with ligands on the y-axis and methods on the x-axis,
@@ -167,70 +169,61 @@ def organize_data(chai_files, boltz_files, chai_dir, boltz_dir, config):
     # Initialize a nested dictionary with ligands as the outer key and methods as the inner key
     data = defaultdict(dict)
     
-    # Process CHAI files if enabled in config
-    if config["methods"]["use_chai"]:
-        for file_path in chai_files:
-            is_msa, subfolder = get_chai_identifier_from_path(file_path, chai_dir)
+    # Process each prediction run
+    for run in prediction_runs:
+        run_id = run.get("id", "")
+        methods = run.get("methods", {})
+        
+        # Process CHAI files if enabled for this run
+        if methods.get("use_chai", True):
+            if not quiet:
+                print(f"Processing CHAI files for prediction run: {run_id}")
             
-            # Skip MSA files if MSA is disabled
-            if is_msa and not config["methods"]["use_msa"]:
-                continue
+            for file_path in chai_files:
+                is_msa, subfolder = get_chai_identifier_from_path(file_path, chai_dir)
                 
-            plddt = extract_chai_plddt(file_path)
-            
-            if plddt is not None and subfolder:
-                # Determine the method based on whether it's MSA or not
-                method = 'chai_with_MSA' if is_msa else 'chai'
-                # Store the pLDDT value
-                data[subfolder][method] = plddt
-    
-    # Process BOLTZ files if enabled in config
-    if config["methods"]["use_boltz"]:
-        for file_path in boltz_files:
-            is_msa, subfolder = get_boltz_identifier_from_path(file_path, boltz_dir)
-            
-            # Skip MSA files if MSA is disabled
-            if is_msa and not config["methods"]["use_msa"]:
-                continue
+                # Skip MSA files if MSA is disabled for this run
+                if is_msa and not methods.get("use_msa", False):
+                    continue
+                    
+                plddt = extract_chai_plddt(file_path)
                 
-            plddt = extract_boltz_plddt(file_path)
+                if plddt is not None and subfolder:
+                    # Determine the method based on whether it's MSA or not
+                    method = f'chai_with_MSA_{run_id}' if is_msa else f'chai_{run_id}'
+                    # Store the pLDDT value
+                    data[subfolder][method] = plddt
+        
+        # Process BOLTZ files if enabled for this run
+        if methods.get("use_boltz", True):
+            if not quiet:
+                print(f"Processing BOLTZ files for prediction run: {run_id}")
             
-            if plddt is not None and subfolder:
-                # Determine the method based on whether it's MSA or not
-                method = 'boltz_with_MSA' if is_msa else 'boltz'
-                # Store the pLDDT value
-                data[subfolder][method] = plddt
+            for file_path in boltz_files:
+                is_msa, subfolder = get_boltz_identifier_from_path(file_path, boltz_dir)
+                
+                # Skip MSA files if MSA is disabled for this run
+                if is_msa and not methods.get("use_msa", False):
+                    continue
+                    
+                plddt = extract_boltz_plddt(file_path)
+                
+                if plddt is not None and subfolder:
+                    # Determine the method based on whether it's MSA or not
+                    method = f'boltz_with_MSA_{run_id}' if is_msa else f'boltz_{run_id}'
+                    # Store the pLDDT value
+                    data[subfolder][method] = plddt
     
     return data
 
-def create_heatmap(data_dict, output_file, config, quiet=False):
+def create_heatmap(data_dict, output_file, quiet=False):
     """Create a heatmap visualization of the complex_plddt values."""
     # Convert the nested dictionary to a pandas DataFrame
     df = pd.DataFrame(data_dict).T.fillna(0)
     
-    # Determine available methods based on configuration and data
-    available_methods = []
-    all_methods = ['chai', 'chai_with_MSA', 'boltz', 'boltz_with_MSA']
-    
-    # Filter methods based on configuration
-    if not config["methods"]["use_chai"]:
-        all_methods = [m for m in all_methods if not m.startswith('chai')]
-    if not config["methods"]["use_boltz"]:
-        all_methods = [m for m in all_methods if not m.startswith('boltz')]
-    if not config["methods"]["use_msa"]:
-        all_methods = [m for m in all_methods if not '_with_MSA' in m]
-    
-    # Filter methods based on available data
-    for method in all_methods:
-        if method in df.columns:
-            available_methods.append(method)
-    
-    if not available_methods:
-        print("No methods available for visualization.")
+    if df.empty or df.shape[1] == 0:
+        print("No data available for visualization.")
         return None
-    
-    # Reindex with available methods
-    df = df.reindex(columns=available_methods)
     
     # Sort the ligands (rows) alphabetically
     df = df.sort_index()
@@ -269,17 +262,74 @@ def main():
     
     # Load configuration
     config = config_loader.load_config()
+    
+    # Get the analysis run to use
+    analysis_runs = config.get("analysis_runs", [])
+    analysis_run = None
+    
+    if args.analysis_run:
+        # Find the specified analysis run
+        for run in analysis_runs:
+            if run.get("id") == args.analysis_run:
+                analysis_run = run
+                break
+        
+        if not analysis_run:
+            print(f"Analysis run '{args.analysis_run}' not found.")
+            return
+    else:
+        # Get the first enabled analysis run
+        for run in analysis_runs:
+            if run.get("enabled", True):
+                analysis_run = run
+                break
+    
+    if not analysis_run:
+        print("No enabled analysis runs found.")
+        return
+    
+    # Get the source predictions for this analysis run
+    source_prediction_ids = analysis_run.get("source_predictions", [])
+    if not source_prediction_ids:
+        print(f"No source predictions specified for analysis run '{analysis_run.get('id')}'.")
+        return
+    
+    # Get the prediction runs
+    prediction_runs = []
+    for pred_id in source_prediction_ids:
+        pred_run = config_loader.get_prediction_run_by_id(config, pred_id)
+        if pred_run:
+            prediction_runs.append(pred_run)
+    
+    if not prediction_runs:
+        print("No valid prediction runs found.")
+        return
+    
+    # Update config with command-line arguments
     config = config_loader.update_config_from_args(config, args)
     
+    # Get directories from config
+    # Handle both old and new configuration structures
+    if "directories" in config.get("global", {}):
+        # Old configuration structure
+        plots_dir = Path(config["global"]["directories"]["plots"])
+        csv_dir = Path(config["global"]["directories"]["csv"])
+        chai_dir = Path(config["global"]["directories"]["chai_output"])
+        boltz_dir = Path(config["global"]["directories"]["boltz_output"])
+    else:
+        # New configuration structure
+        plots_dir = Path(config.get("global", {}).get("plots", "plots"))
+        csv_dir = Path(config.get("global", {}).get("csv", "csv"))
+        chai_dir = Path(config.get("global", {}).get("chai_output", "OUTPUT/CHAI"))
+        boltz_dir = Path(config.get("global", {}).get("boltz_output", "OUTPUT/BOLTZ"))
+    
     # Create plots directory if it doesn't exist
-    plots_dir = Path(config["directories"]["plots"])
     if not plots_dir.exists():
         plots_dir.mkdir()
         if not args.quiet:
             print(f"Created directory: {plots_dir}")
     
     # Create csv directory if it doesn't exist
-    csv_dir = Path(config["directories"]["csv"])
     if not csv_dir.exists():
         csv_dir.mkdir()
         if not args.quiet:
@@ -289,21 +339,11 @@ def main():
     if args.output:
         output_file = Path(args.output)
     else:
-        output_file = plots_dir / 'plddt_heatmap.png'
-    
-    # Define the root directories
-    chai_dir = Path(config["directories"]["chai_output"])
-    boltz_dir = Path(config["directories"]["boltz_output"])
+        output_file = plots_dir / f'plddt_heatmap_{analysis_run.get("id")}.png'
     
     # Find all JSON files with pLDDT values
-    chai_files = []
-    boltz_files = []
-    
-    if config["methods"]["use_chai"]:
-        chai_files = find_chai_json_files(chai_dir, args.quiet)
-    
-    if config["methods"]["use_boltz"]:
-        boltz_files = find_boltz_json_files(boltz_dir, args.quiet)
+    chai_files = find_chai_json_files(chai_dir, args.quiet)
+    boltz_files = find_boltz_json_files(boltz_dir, args.quiet)
     
     total_files = len(chai_files) + len(boltz_files)
     if not args.quiet:
@@ -314,18 +354,18 @@ def main():
         return
     
     # Extract and organize the data
-    data = organize_data(chai_files, boltz_files, chai_dir, boltz_dir, config)
+    data = organize_data(chai_files, boltz_files, chai_dir, boltz_dir, prediction_runs, args.quiet)
     
     if not data:
         print("No data found to visualize.")
         return
     
     # Create the heatmap
-    df = create_heatmap(data, output_file, config, args.quiet)
+    df = create_heatmap(data, output_file, args.quiet)
     
     if df is not None:
         # Save the data to CSV for further analysis
-        csv_file = csv_dir / 'plddt_values.csv'
+        csv_file = csv_dir / f'plddt_values_{analysis_run.get("id")}.csv'
         df.to_csv(csv_file)
         if not args.quiet:
             print(f"Data saved to {csv_file}")

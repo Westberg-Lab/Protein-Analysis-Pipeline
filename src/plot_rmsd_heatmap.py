@@ -42,10 +42,19 @@ def parse_arguments():
 
 def get_templates(config):
     """Get all template files from configuration."""
-    if "files" in config["templates"]:
-        return [Path(template) for template in config["templates"]["files"]]
-    elif "default_template" in config["templates"]:
-        return [Path(config["templates"]["default_template"])]
+    # Handle both old and new configuration structures
+    if "templates" in config:
+        # Old configuration structure
+        if "files" in config["templates"]:
+            return [Path(template) for template in config["templates"]["files"]]
+        elif "default_template" in config["templates"]:
+            return [Path(config["templates"]["default_template"])]
+    else:
+        # New configuration structure
+        if "files" in config:
+            return [Path(template) for template in config["files"]]
+        elif "default_template" in config:
+            return [Path(config["default_template"])]
     return []
 
 def find_rmsd_csv_files(pse_dir, template_name=None):
@@ -148,8 +157,13 @@ def create_heatmap(df, output_file, config, quiet=False):
         # Apply normalization to better visualize small differences
         from matplotlib.colors import Normalize
         
-        vmin = config["visualization"]["rmsd_vmin"]
-        vmax = config["visualization"]["rmsd_vmax"]
+        # Get visualization parameters
+        if "visualization" in config:
+            vmin = config["visualization"]["rmsd_vmin"]
+            vmax = config["visualization"]["rmsd_vmax"]
+        else:
+            vmin = config.get("rmsd_vmin", 0.2)
+            vmax = config.get("rmsd_vmax", 6.2)
         
         # Create the heatmap with seaborn using the natural colormap and normalization
         ax = sns.heatmap(pivot_df, annot=True, cmap='RdYlGn_r', fmt='.4f', 
@@ -193,7 +207,14 @@ def process_template(template_name, config, args, plots_dir, csv_dir):
             return False
     else:
         # Auto-detect input files for this template
-        pse_dir = Path(config["directories"]["pse_files"])
+        # Handle both old and new configuration structures
+        if "directories" in config:
+            # Old configuration structure
+            pse_dir = Path(config["directories"]["pse_files"])
+        else:
+            # New configuration structure
+            pse_dir = Path(config.get("pse_files", "PSE_FILES"))
+        
         input_files = find_rmsd_csv_files(pse_dir, template_name)
         if not input_files:
             print(f"No RMSD CSV files found for template {template_name} in {pse_dir} subdirectories.")
@@ -251,15 +272,24 @@ def main():
     config = config_loader.load_config()
     config = config_loader.update_config_from_args(config, args)
     
+    # Get directories from config
+    # Handle both old and new configuration structures
+    if "directories" in config:
+        # Old configuration structure
+        plots_dir = Path(config["directories"]["plots"])
+        csv_dir = Path(config["directories"]["csv"])
+    else:
+        # New configuration structure
+        plots_dir = Path(config.get("plots", "plots"))
+        csv_dir = Path(config.get("csv", "csv"))
+    
     # Create plots directory if it doesn't exist
-    plots_dir = Path(config["directories"]["plots"])
     if not plots_dir.exists():
         plots_dir.mkdir()
         if not args.quiet:
             print(f"Created directory: {plots_dir}")
     
     # Create csv directory if it doesn't exist
-    csv_dir = Path(config["directories"]["csv"])
     if not csv_dir.exists():
         csv_dir.mkdir()
         if not args.quiet:
