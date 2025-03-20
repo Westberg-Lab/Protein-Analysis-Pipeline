@@ -101,6 +101,22 @@ def archive_files(archive_dir, files_to_archive):
         else:
             print(f"Skipped (not found): {file_path}")
 
+def copy_config_files(archive_dir, config_files_to_copy):
+    """Copy configuration files to the archive directory."""
+    for file_path in config_files_to_copy:
+        file_path = Path(file_path)
+        if file_path.exists():
+            # Skip empty files
+            if is_file_empty(file_path):
+                print(f"Skipped (empty): {file_path}")
+                continue
+            
+            # Copy the file to the archive
+            shutil.copy2(str(file_path), str(archive_dir / file_path.name))
+            print(f"Copied config: {file_path} -> {archive_dir / file_path.name}")
+        else:
+            print(f"Skipped (not found): {file_path}")
+
 def delete_directories(dirs_to_delete):
     """Delete directories without archiving."""
     for dir_path in dirs_to_delete:
@@ -153,6 +169,12 @@ def main():
         "plddt_heatmap.png"
     ]
     
+    # Define configuration files to copy (not move)
+    config_files_to_copy = [
+        "molecules.json",
+        "pipeline_config.json"
+    ]
+    
     if args.no_archive:
         # Delete without archiving
         print("Deleting previous outputs without archiving...")
@@ -166,6 +188,10 @@ def main():
         print("Archiving previous outputs...")
         archive_directories(archive_dir, dirs_to_handle)
         archive_files(archive_dir, files_to_handle)
+        
+        # Copy configuration files
+        print("Copying configuration files to archive...")
+        copy_config_files(archive_dir, config_files_to_copy)
     
     # Create fresh directories
     print("\nCreating fresh directories for new run...")

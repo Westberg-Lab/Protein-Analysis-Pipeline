@@ -143,6 +143,7 @@ Archives previous outputs and creates fresh directories for new runs.
 ### Functionality
 - Creates a timestamped archive directory
 - Moves previous output directories and files to the archive
+- Copies configuration files (molecules.json and pipeline_config.json) to the archive
 - Creates fresh empty directories for a new run
 - Can delete previous outputs without archiving if requested
 
@@ -158,6 +159,7 @@ python archive_and_clean.py [--no-archive]
 - `is_dir_empty()`: Checks if a directory is empty or contains only empty files and directories
 - `archive_directories()`: Moves non-empty directories to the archive directory
 - `archive_files()`: Moves non-empty files to the archive directory
+- `copy_config_files()`: Copies configuration files to the archive directory
 - `delete_directories()`: Deletes directories without archiving
 - `delete_files()`: Deletes files without archiving
 - `create_project_directories()`: Creates all necessary project directories
@@ -165,7 +167,8 @@ python archive_and_clean.py [--no-archive]
 
 ### Directories and Files Handled
 - Directories: "CHAI_FASTA", "BOLTZ_YAML", "OUTPUT", "PSE_FILES", "plots", "csv"
-- Files: "rmsd_values.csv", "plddt_values.csv", "rmsd_heatmap.png", "plddt_heatmap.png"
+- Files to archive: "rmsd_values.csv", "plddt_values.csv", "rmsd_heatmap.png", "plddt_heatmap.png"
+- Configuration files to copy: "molecules.json", "pipeline_config.json"
 
 ### Example Usage
 ```bash

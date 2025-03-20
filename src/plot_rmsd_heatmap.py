@@ -34,10 +34,8 @@ def parse_arguments():
                         help='Output PNG file for the heatmap (default: plots/rmsd_heatmap_[reference].png)')
     parser.add_argument('--reference', type=str, default=None,
                         help='Reference name to filter by (default: use all references)')
-    parser.add_argument('--quiet', action='store_true',
-                        help='Suppress detailed output')
     
-    # Add common arguments
+    # Add common arguments (which includes --quiet)
     parser = config_loader.add_common_args(parser)
     
     return parser.parse_args()

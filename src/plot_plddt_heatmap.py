@@ -35,7 +35,7 @@ def parse_arguments():
     parser.add_argument('--output', type=str, default=None,
                         help='Output PNG file for the heatmap (default: plots/plddt_heatmap.png)')
     
-    # Add common arguments
+    # Add common arguments (which includes --quiet)
     parser = config_loader.add_common_args(parser)
     
     return parser.parse_args()
