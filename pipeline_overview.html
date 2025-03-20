@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Protein Prediction Pipeline&colon; Integration Overview</title>
+            <style>
+/* From extension vscode.github */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.vscode-dark img[src$=\#gh-light-mode-only],
+.vscode-light img[src$=\#gh-dark-mode-only],
+.vscode-high-contrast:not(.vscode-high-contrast-light) img[src$=\#gh-light-mode-only],
+.vscode-high-contrast-light img[src$=\#gh-dark-mode-only] {
+	display: none;
+}
+
+</style>
+            
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
+<style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+        </style>
+        <style>
+.task-list-item {
+    list-style-type: none;
+}
+
+.task-list-item-checkbox {
+    margin-left: -20px;
+    vertical-align: middle;
+    pointer-events: none;
+}
+</style>
+<style>
+:root {
+  --color-note: #0969da;
+  --color-tip: #1a7f37;
+  --color-warning: #9a6700;
+  --color-severe: #bc4c00;
+  --color-caution: #d1242f;
+  --color-important: #8250df;
+}
+
+</style>
+<style>
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-note: #2f81f7;
+    --color-tip: #3fb950;
+    --color-warning: #d29922;
+    --color-severe: #db6d28;
+    --color-caution: #f85149;
+    --color-important: #a371f7;
+  }
+}
+
+</style>
+<style>
+.markdown-alert {
+  padding: 0.5rem 1rem;
+  margin-bottom: 16px;
+  color: inherit;
+  border-left: .25em solid #888;
+}
+
+.markdown-alert>:first-child {
+  margin-top: 0
+}
+
+.markdown-alert>:last-child {
+  margin-bottom: 0
+}
+
+.markdown-alert .markdown-alert-title {
+  display: flex;
+  font-weight: 500;
+  align-items: center;
+  line-height: 1
+}
+
+.markdown-alert .markdown-alert-title .octicon {
+  margin-right: 0.5rem;
+  display: inline-block;
+  overflow: visible !important;
+  vertical-align: text-bottom;
+  fill: currentColor;
+}
+
+.markdown-alert.markdown-alert-note {
+  border-left-color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-note .markdown-alert-title {
+  color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-important {
+  border-left-color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-important .markdown-alert-title {
+  color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-warning {
+  border-left-color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-warning .markdown-alert-title {
+  color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-tip {
+  border-left-color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-tip .markdown-alert-title {
+  color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-caution {
+  border-left-color: var(--color-caution);
+}
+
+.markdown-alert.markdown-alert-caution .markdown-alert-title {
+  color: var(--color-caution);
+}
+
+</style>
+        
+        </head>
+        <body class="vscode-body vscode-light">
+            <h1 id="protein-prediction-pipeline-integration-overview">Protein Prediction Pipeline: Integration Overview</h1>
+<p>This document provides a high-level overview of the protein prediction pipeline, explaining how the various components work together to predict and analyze protein structures.</p>
+<h2 id="pipeline-purpose">Pipeline Purpose</h2>
+<p>The protein prediction pipeline is designed to automate the process of predicting protein structures using multiple prediction methods (CHAI and BOLTZ), with or without Multiple Sequence Alignment (MSA), and to analyze and visualize the results. The pipeline handles the entire workflow from input preparation to visualization of results.</p>
+<h2 id="workflow-diagram">Workflow Diagram</h2>
+<pre><code class="language-mermaid">graph TD
+    A[Input: Molecule Definitions] --&gt; B[Generate FASTA/YAML Files]
+    B --&gt; C1[Run CHAI Predictions]
+    B --&gt; C2[Run BOLTZ Predictions]
+    C1 --&gt; D[Combine CIF Files]
+    C2 --&gt; D
+    D --&gt; E1[Generate RMSD Heatmaps]
+    D --&gt; E2[Generate pLDDT Heatmaps]
+    E1 --&gt; F[Final Analysis]
+    E2 --&gt; F
+</code></pre>
+<h2 id="file-overview">File Overview</h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>run_pipeline.py</strong></td>
+<td>Main orchestration script that runs the entire pipeline</td>
+</tr>
+<tr>
+<td><strong>config_loader.py</strong></td>
+<td>Loads and manages configuration from pipeline_config.json</td>
+</tr>
+<tr>
+<td><strong>archive_and_clean.py</strong></td>
+<td>Archives previous outputs and creates fresh directories</td>
+</tr>
+<tr>
+<td><strong>generate_chai_fasta.py</strong></td>
+<td>Generates FASTA files for CHAI predictions</td>
+</tr>
+<tr>
+<td><strong>generate_boltz_yaml.py</strong></td>
+<td>Generates YAML files for BOLTZ predictions</td>
+</tr>
+<tr>
+<td><strong>run_chai_apptainer.py</strong></td>
+<td>Runs CHAI protein structure prediction using Apptainer</td>
+</tr>
+<tr>
+<td><strong>run_boltz_apptainer.py</strong></td>
+<td>Runs BOLTZ protein structure prediction using Apptainer</td>
+</tr>
+<tr>
+<td><strong>combine_cif_files.py</strong></td>
+<td>Creates PyMOL session files and calculates RMSD values</td>
+</tr>
+<tr>
+<td><strong>plot_rmsd_heatmap.py</strong></td>
+<td>Generates heatmap visualizations of RMSD values</td>
+</tr>
+<tr>
+<td><strong>plot_plddt_heatmap.py</strong></td>
+<td>Generates heatmap visualizations of pLDDT values</td>
+</tr>
+<tr>
+<td><strong>pipeline_config.json</strong></td>
+<td>Configuration file for the pipeline</td>
+</tr>
+</tbody>
+</table>
+<h2 id="data-flow-and-integration">Data Flow and Integration</h2>
+<h3 id="1-configuration-and-setup">1. Configuration and Setup</h3>
+<p>The pipeline begins with <strong>run_pipeline.py</strong>, which loads configuration from <strong>pipeline_config.json</strong> using <strong>config_loader.py</strong>. The configuration defines directories, methods to use, templates, and visualization parameters.</p>
+<p>Before starting a new run, <strong>archive_and_clean.py</strong> is called to archive previous outputs, copy configuration files (molecules.json and pipeline_config.json) to the archive for reference, and create fresh directories for the new run.</p>
+<h3 id="2-input-preparation">2. Input Preparation</h3>
+<p>Based on molecule definitions in a JSON file:</p>
+<ul>
+<li><strong>generate_chai_fasta.py</strong> creates FASTA files for CHAI predictions</li>
+<li><strong>generate_boltz_yaml.py</strong> creates YAML files for BOLTZ predictions</li>
+</ul>
+<p>These files are organized in directory structures that match the molecule names.</p>
+<h3 id="3-structure-prediction">3. Structure Prediction</h3>
+<p>If enabled in the configuration:</p>
+<ul>
+<li><strong>run_chai_apptainer.py</strong> processes each FASTA file and runs the CHAI prediction tool</li>
+<li><strong>run_boltz_apptainer.py</strong> processes each YAML file and runs the BOLTZ prediction tool</li>
+</ul>
+<p>Both scripts support MSA-based predictions and skip files that have already been processed.</p>
+<h3 id="4-analysis-and-visualization">4. Analysis and Visualization</h3>
+<p>After predictions are complete:</p>
+<ul>
+<li><strong>combine_cif_files.py</strong> finds protein structures from both CHAI and BOLTZ outputs, loads them into PyMOL, aligns them to templates, calculates RMSD values, and creates PyMOL session files (.pse)</li>
+<li><strong>plot_rmsd_heatmap.py</strong> reads RMSD values from CSV files and creates heatmap visualizations</li>
+<li><strong>plot_plddt_heatmap.py</strong> extracts pLDDT values from JSON files and creates heatmap visualizations</li>
+</ul>
+<h3 id="5-output-organization">5. Output Organization</h3>
+<p>The pipeline organizes outputs in a structured directory hierarchy:</p>
+<ul>
+<li><strong>CHAI_FASTA/</strong>: FASTA files for CHAI predictions</li>
+<li><strong>BOLTZ_YAML/</strong>: YAML files for BOLTZ predictions</li>
+<li><strong>OUTPUT/CHAI/</strong>: CHAI prediction results</li>
+<li><strong>OUTPUT/BOLTZ/</strong>: BOLTZ prediction results</li>
+<li><strong>PSE_FILES/</strong>: PyMOL session files</li>
+<li><strong>plots/</strong>: Heatmap visualizations</li>
+<li><strong>csv/</strong>: CSV files with RMSD and pLDDT values</li>
+<li><strong>archive_[timestamp]/</strong>: Archive directories containing:
+<ul>
+<li>Previous run outputs</li>
+<li>Copies of configuration files (molecules.json and pipeline_config.json)</li>
+</ul>
+</li>
+</ul>
+<h2 id="configuration-and-customization">Configuration and Customization</h2>
+<p>The pipeline is highly configurable through <strong>pipeline_config.json</strong> and command-line arguments. The configuration file now supports multiple configurations that can be run in a single pipeline execution.</p>
+<h3 id="configuration-structure">Configuration Structure</h3>
+<p>The configuration file has two main sections:</p>
+<ol>
+<li><strong>Global Settings</strong>: Common settings shared across all configurations</li>
+<li><strong>Configurations</strong>: Multiple specific configurations, each with its own settings</li>
+</ol>
+<pre><code class="language-json"><span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">&quot;global&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">&quot;directories&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> ... <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">&quot;templates&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> ... <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">&quot;visualization&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> ... <span class="hljs-punctuation">}</span>
+  <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;configurations&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
+    <span class="hljs-punctuation">{</span>
+      <span class="hljs-attr">&quot;id&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;standard&quot;</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">&quot;description&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Standard run without MSA&quot;</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">&quot;enabled&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-keyword">true</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">&quot;methods&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+        <span class="hljs-attr">&quot;use_chai&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-keyword">true</span><span class="hljs-punctuation">,</span>
+        <span class="hljs-attr">&quot;use_boltz&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-keyword">true</span><span class="hljs-punctuation">,</span>
+        <span class="hljs-attr">&quot;use_msa&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-keyword">false</span><span class="hljs-punctuation">,</span>
+        <span class="hljs-attr">&quot;use_msa_dir&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-keyword">false</span>
+      <span class="hljs-punctuation">}</span>
+    <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-punctuation">{</span>
+      <span class="hljs-attr">&quot;id&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;with_msa&quot;</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">&quot;description&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Run with MSA enabled&quot;</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">&quot;enabled&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-keyword">true</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">&quot;methods&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+        <span class="hljs-attr">&quot;use_chai&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-keyword">true</span><span class="hljs-punctuation">,</span>
+        <span class="hljs-attr">&quot;use_boltz&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-keyword">true</span><span class="hljs-punctuation">,</span>
+        <span class="hljs-attr">&quot;use_msa&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-keyword">true</span><span class="hljs-punctuation">,</span>
+        <span class="hljs-attr">&quot;use_msa_dir&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-keyword">false</span>
+      <span class="hljs-punctuation">}</span>
+    <span class="hljs-punctuation">}</span>
+  <span class="hljs-punctuation">]</span>
+<span class="hljs-punctuation">}</span>
+</code></pre>
+<h3 id="key-configuration-options">Key Configuration Options</h3>
+<ul>
+<li><strong>Directories</strong>: Paths for inputs, outputs, and intermediate files</li>
+<li><strong>Methods</strong>: Which prediction methods to use (CHAI, BOLTZ, MSA)</li>
+<li><strong>Templates</strong>: Template files for structural comparison</li>
+<li><strong>Visualization</strong>: Parameters for heatmap visualizations</li>
+</ul>
+<h3 id="default-configurations">Default Configurations</h3>
+<p>By default, the pipeline includes two configurations:</p>
+<ol>
+<li><strong>standard</strong>: Runs without MSA</li>
+<li><strong>with_msa</strong>: Runs with MSA enabled</li>
+</ol>
+<p>This allows you to generate both MSA and non-MSA predictions in a single pipeline run, maintaining the existing directory structure that the plotting scripts rely on.</p>
+<h2 id="pipeline-execution">Pipeline Execution</h2>
+<p>The pipeline can be run with a single command:</p>
+<pre><code class="language-bash">python run_pipeline.py
+</code></pre>
+<h3 id="command-line-options">Command-line Options</h3>
+<p>The pipeline supports a comprehensive set of command-line options for customization:</p>
+<h4 id="configuration-options">Configuration Options</h4>
+<ul>
+<li><code>--config CONFIG_FILE</code>: Specify a custom configuration file (default: pipeline_config.json)</li>
+<li><code>--configs CONFIG_IDS</code>: Comma-separated list of configuration IDs to run (default: all enabled)</li>
+<li><code>--enable-config CONFIG_ID</code>: Enable a specific configuration (can be used multiple times)</li>
+<li><code>--disable-config CONFIG_ID</code>: Disable a specific configuration (can be used multiple times)</li>
+</ul>
+<h4 id="archiving-options">Archiving Options</h4>
+<ul>
+<li><code>--no-archive</code>: Delete previous outputs without archiving</li>
+</ul>
+<h4 id="pipeline-flow-control">Pipeline Flow Control</h4>
+<ul>
+<li><code>--skip-step STEP</code>: Skip a specific step in the pipeline. Can be used multiple times.
+<ul>
+<li>Valid steps: archive, chai-fasta, boltz-yaml, chai-run, boltz-run, combine-cif, rmsd-plot, plddt-plot</li>
+</ul>
+</li>
+<li><code>--resume</code>: Resume pipeline from the last failed step</li>
+<li><code>--force-resume</code>: Force resume even if configuration has changed</li>
+<li><code>--state-file STATE_FILE</code>: Specify a custom pipeline state file (default: pipeline_state.json)</li>
+<li><code>--clean-state</code>: Clean the state file before starting</li>
+</ul>
+<h4 id="method-selection">Method Selection</h4>
+<ul>
+<li><code>--use-chai</code>: Use CHAI for predictions (default: enabled)</li>
+<li><code>--no-chai</code>: Do not use CHAI for predictions</li>
+<li><code>--use-boltz</code>: Use BOLTZ for predictions (default: enabled)</li>
+<li><code>--no-boltz</code>: Do not use BOLTZ for predictions</li>
+<li><code>--use-msa</code>: Use MSA for predictions (default: enabled)</li>
+<li><code>--no-msa</code>: Do not use MSA for predictions</li>
+<li><code>--use-msa-dir</code>: Use MSA directory for CHAI (default: disabled)</li>
+</ul>
+<h4 id="directory-options">Directory Options</h4>
+<ul>
+<li><code>--chai-fasta DIR</code>: CHAI FASTA directory (default: CHAI_FASTA)</li>
+<li><code>--boltz-yaml DIR</code>: BOLTZ YAML directory (default: BOLTZ_YAML)</li>
+<li><code>--chai-output DIR</code>: CHAI output directory (default: OUTPUT/CHAI)</li>
+<li><code>--boltz-output DIR</code>: BOLTZ output directory (default: OUTPUT/BOLTZ)</li>
+<li><code>--pse-files DIR</code>: PSE files directory (default: PSE_FILES)</li>
+<li><code>--plots DIR</code>: Plots directory (default: plots)</li>
+<li><code>--csv DIR</code>: CSV files directory (default: csv)</li>
+</ul>
+<h4 id="template-options">Template Options</h4>
+<ul>
+<li><code>--template FILE</code>: Template file (default: from config)</li>
+<li><code>--model-idx N</code>: Model index to search for (default: from config)</li>
+</ul>
+<h4 id="output-control">Output Control</h4>
+<ul>
+<li><code>--quiet</code>: Suppress detailed output</li>
+</ul>
+<h3 id="example-commands">Example Commands</h3>
+<pre><code class="language-bash"><span class="hljs-comment"># Run with default settings (both standard and with_msa configurations)</span>
+python run_pipeline.py
+
+<span class="hljs-comment"># Run only the standard configuration (without MSA)</span>
+python run_pipeline.py --configs standard
+
+<span class="hljs-comment"># Run only the with_msa configuration</span>
+python run_pipeline.py --configs with_msa
+
+<span class="hljs-comment"># Enable a specific configuration</span>
+python run_pipeline.py --enable-config standard --disable-config with_msa
+
+<span class="hljs-comment"># Skip archiving and use only CHAI</span>
+python run_pipeline.py --no-archive --use-chai --no-boltz
+
+<span class="hljs-comment"># Resume a failed pipeline run</span>
+python run_pipeline.py --resume
+
+<span class="hljs-comment"># Skip specific steps</span>
+python run_pipeline.py --skip-step chai-fasta --skip-step boltz-yaml
+
+<span class="hljs-comment"># Use a custom template and model index</span>
+python run_pipeline.py --template custom_template.cif --model-idx 2
+
+<span class="hljs-comment"># Use custom directories</span>
+python run_pipeline.py --chai-fasta custom_fasta --boltz-yaml custom_yaml --plots custom_plots
+</code></pre>
+<p>The pipeline uses state tracking, allowing it to resume from failures without rerunning completed steps. This is particularly useful for long-running predictions that may encounter temporary issues.</p>
+<h3 id="how-it-works">How It Works</h3>
+<p>When you run the pipeline:</p>
+<ol>
+<li>It loads the configuration file and identifies enabled configurations</li>
+<li>For each enabled configuration, it:
+<ul>
+<li>Merges global settings with configuration-specific settings</li>
+<li>Runs the pipeline steps with the merged configuration</li>
+<li>Maintains the existing directory structure (with or without _with_MSA suffix based on the configuration)</li>
+</ul>
+</li>
+</ol>
+<p>This approach allows you to run both MSA and non-MSA predictions in a single pipeline run, while maintaining compatibility with the existing plotting scripts.</p>
+
+            
+            
+        </body>
+        </html>

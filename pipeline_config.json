@@ -1,27 +1,47 @@
 {
-  "directories": {
-    "chai_fasta": "CHAI_FASTA",
-    "boltz_yaml": "BOLTZ_YAML",
-    "chai_output": "OUTPUT/CHAI",
-    "boltz_output": "OUTPUT/BOLTZ",
-    "pse_files": "PSE_FILES",
-    "plots": "plots",
-    "csv": "csv"
+  "global": {
+    "directories": {
+      "chai_fasta": "CHAI_FASTA",
+      "boltz_yaml": "BOLTZ_YAML",
+      "chai_output": "OUTPUT/CHAI",
+      "boltz_output": "OUTPUT/BOLTZ",
+      "pse_files": "PSE_FILES",
+      "plots": "plots",
+      "csv": "csv"
+    },
+    "templates": {
+      "files": [
+        "hM3Dq_DCZ.cif"
+      ],
+      "model_idx": 4
+    },
+    "visualization": {
+      "rmsd_vmin": 0.2,
+      "rmsd_vmax": 6.2
+    }
   },
-  "methods": {
-    "use_chai": true,
-    "use_boltz": true,
-    "use_msa": true,
-    "use_msa_dir": false
-  },
-  "templates": {
-    "files": [
-      "hM3Dq_DCZ.cif"
-    ],
-    "model_idx": 4
-  },
-  "visualization": {
-    "rmsd_vmin": 0.2,
-    "rmsd_vmax": 6.2
-  }
+  "configurations": [
+    {
+      "id": "standard",
+      "description": "Standard run without MSA",
+      "enabled": true,
+      "methods": {
+        "use_chai": true,
+        "use_boltz": true,
+        "use_msa": false,
+        "use_msa_dir": false
+      }
+    },
+    {
+      "id": "with_msa",
+      "description": "Run with MSA enabled",
+      "enabled": true,
+      "methods": {
+        "use_chai": true,
+        "use_boltz": true,
+        "use_msa": true,
+        "use_msa_dir": false
+      }
+    }
+  ]
 }

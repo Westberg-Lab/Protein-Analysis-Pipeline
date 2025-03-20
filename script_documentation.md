@@ -27,6 +27,7 @@ The master script that orchestrates the entire protein prediction pipeline from 
 - Runs each script in the pipeline in the correct order
 - Handles errors and provides status updates
 - Supports resuming from failures
+- Supports running multiple configurations in a single pipeline run
 
 ### Command-line Arguments
 ```
@@ -35,7 +36,8 @@ python run_pipeline.py [--config CONFIG_FILE] [--no-archive] [--skip-step STEP]
                       [--use-msa] [--no-msa] [--use-msa-dir]
                       [--template TEMPLATE_FILE] [--model-idx N]
                       [--quiet] [--resume] [--force-resume] [--state-file STATE_FILE]
-                      [--clean-state]
+                      [--clean-state] [--configs CONFIG_IDS]
+                      [--enable-config CONFIG_ID] [--disable-config CONFIG_ID]
 ```
 
 ### Key Functions
@@ -46,6 +48,7 @@ python run_pipeline.py [--config CONFIG_FILE] [--no-archive] [--skip-step STEP]
 - `update_state()`: Updates the pipeline state after a step
 - `log_message()`: Logs a message with timestamp
 - `run_step()`: Runs a pipeline step with error handling and state tracking
+- `run_pipeline_steps()`: Runs pipeline steps for a specific configuration
 - `main()`: Main function that orchestrates the pipeline
 
 ### Dependencies
@@ -54,11 +57,20 @@ python run_pipeline.py [--config CONFIG_FILE] [--no-archive] [--skip-step STEP]
 
 ### Example Usage
 ```bash
-# Run the entire pipeline with default settings
+# Run the entire pipeline with default settings (both standard and with_msa configurations)
 python run_pipeline.py
 
 # Run with a specific configuration file
 python run_pipeline.py --config custom_config.json
+
+# Run only the standard configuration (without MSA)
+python run_pipeline.py --configs standard
+
+# Run only the with_msa configuration
+python run_pipeline.py --configs with_msa
+
+# Enable a specific configuration
+python run_pipeline.py --enable-config standard --disable-config with_msa
 
 # Skip the archiving step
 python run_pipeline.py --no-archive
@@ -82,55 +94,91 @@ Loads and manages configuration for the protein prediction pipeline.
 
 ### Functionality
 - Loads configuration from a JSON file
+- Supports multiple configurations in a single file
 - Provides default values if the file is not found
 - Updates configuration with command-line arguments
 - Adds common arguments to an ArgumentParser
 
 ### Key Functions
 - `load_config(config_file='pipeline_config.json')`: Loads configuration from a JSON file
+- `deep_merge(base, override)`: Deep merges two dictionaries
+- `get_merged_config(config, config_id=None)`: Gets a merged configuration by combining global settings with a specific configuration
+- `get_enabled_configurations(config, config_ids=None)`: Gets a list of enabled configurations
 - `update_config_from_args(config, args)`: Updates configuration with command-line arguments
 - `add_common_args(parser)`: Adds common arguments to an ArgumentParser
 
-### Default Configuration
+### Configuration Structure
+The configuration file now has two main sections:
+
+1. **Global Settings**: Common settings shared across all configurations
+2. **Configurations**: Multiple specific configurations, each with its own settings
+
 ```json
 {
-  "directories": {
-    "chai_fasta": "CHAI_FASTA",
-    "boltz_yaml": "BOLTZ_YAML",
-    "chai_output": "OUTPUT/CHAI",
-    "boltz_output": "OUTPUT/BOLTZ",
-    "pse_files": "PSE_FILES",
-    "plots": "plots",
-    "csv": "csv"
+  "global": {
+    "directories": {
+      "chai_fasta": "CHAI_FASTA",
+      "boltz_yaml": "BOLTZ_YAML",
+      "chai_output": "OUTPUT/CHAI",
+      "boltz_output": "OUTPUT/BOLTZ",
+      "pse_files": "PSE_FILES",
+      "plots": "plots",
+      "csv": "csv"
+    },
+    "templates": {
+      "files": ["hM3Dq_DCZ.cif"],
+      "model_idx": 4
+    },
+    "visualization": {
+      "rmsd_vmin": 0.2,
+      "rmsd_vmax": 6.2
+    }
   },
-  "methods": {
-    "use_chai": true,
-    "use_boltz": true,
-    "use_msa": true,
-    "use_msa_dir": false
-  },
-  "templates": {
-    "default_template": "KOr_w_momSalB.cif",
-    "model_idx": 4
-  },
-  "visualization": {
-    "rmsd_vmin": 0.2,
-    "rmsd_vmax": 6.2
-  }
+  "configurations": [
+    {
+      "id": "standard",
+      "description": "Standard run without MSA",
+      "enabled": true,
+      "methods": {
+        "use_chai": true,
+        "use_boltz": true,
+        "use_msa": false,
+        "use_msa_dir": false
+      }
+    },
+    {
+      "id": "with_msa",
+      "description": "Run with MSA enabled",
+      "enabled": true,
+      "methods": {
+        "use_chai": true,
+        "use_boltz": true,
+        "use_msa": true,
+        "use_msa_dir": false
+      }
+    }
+  ]
 }
 ```
 
 ### Example Usage
 ```python
 # Load configuration
-config = config_loader.load_config()
+full_config = config_loader.load_config()
 
-# Update configuration with command-line arguments
-config = config_loader.update_config_from_args(config, args)
+# Get enabled configurations
+enabled_configs = config_loader.get_enabled_configurations(full_config, args.configs)
 
-# Add common arguments to an ArgumentParser
-parser = argparse.ArgumentParser()
-parser = config_loader.add_common_args(parser)
+# For each configuration
+for cfg in enabled_configs:
+    # Merge global config with this configuration
+    merged_config = config_loader.deep_merge(full_config.get("global", {}), cfg)
+    
+    # Update with command-line arguments
+    merged_config = config_loader.update_config_from_args(merged_config, args)
+    
+    # Use the merged configuration
+    print(merged_config)
 ```
 
 ---

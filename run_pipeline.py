@@ -175,68 +175,8 @@ def run_step(command, description, step_id, quiet=False, state_file=None, state=
         
         return False
 
-def main():
-    """Main function."""
-    args = parse_arguments()
-    
-    # Load configuration
-    config = config_loader.load_config(args.config)
-    config = config_loader.update_config_from_args(config, args)
-    
-    # Initialize state tracking if resume is enabled
-    state_file = None
-    state = None
-    
-    if args.resume or args.clean_state:
-        state_file = args.state_file
-        state = read_state_file(state_file)
-        
-        # Clean state if requested
-        if args.clean_state:
-            state = {
-                "last_run": datetime.now().isoformat(),
-                "config_hash": compute_config_hash(config),
-                "completed_steps": [],
-                "failed_step": None,
-                "error_message": None
-            }
-            write_state_file(state_file, state)
-            log_message(f"Cleaned state file: {state_file}", quiet=args.quiet)
-        
-        # Check if configuration has changed
-        if args.resume and state["config_hash"] and state["config_hash"] != compute_config_hash(config):
-            if not args.force_resume:
-                log_message("Configuration has changed since last run. Use --force-resume to ignore this warning.", 
-                           level="ERROR", quiet=args.quiet)
-                return 1
-            else:
-                log_message("Configuration has changed, but continuing due to --force-resume", 
-                           level="WARNING", quiet=args.quiet)
-        
-        # Update config hash
-        state["config_hash"] = compute_config_hash(config)
-        write_state_file(state_file, state)
-        
-        if args.resume and state["completed_steps"]:
-            log_message(f"Resuming pipeline. Completed steps: {', '.join(state['completed_steps'])}", quiet=args.quiet)
-            if state["failed_step"]:
-                log_message(f"Last failed step: {state['failed_step']}", quiet=args.quiet)
-                log_message(f"Error message: {state['error_message']}", quiet=args.quiet)
-    
-    # Step 1: Archive previous outputs (if not resuming or if not completed)
-    if not args.resume or 'archive' not in state["completed_steps"]:
-        if 'archive' not in args.skip_step:
-            archive_cmd = ["python", "src/archive_and_clean.py"]
-            if args.no_archive:
-                archive_cmd.append("--no-archive")
-            
-            if not run_step(archive_cmd, "Archiving previous outputs", 'archive', args.quiet, state_file, state):
-                log_message("Failed to archive previous outputs. Exiting.", level="ERROR", 
-                           quiet=args.quiet, state_file=state_file, state=state)
-                return 1
-        else:
-            log_message("Skipping: Archiving previous outputs (--skip-step archive)", quiet=args.quiet)
-    
+def run_pipeline_steps(config, args, state_file=None, state=None, config_id=None):
+    """Run pipeline steps for a specific configuration."""
     # Define pipeline steps with standardized arguments
     pipeline_steps = []
     
@@ -383,7 +323,8 @@ def main():
     })
     
     # Run each step in the pipeline
-    log_message("Starting pipeline execution", quiet=args.quiet)
+    config_desc = f" for configuration '{config_id}'" if config_id else ""
+    log_message(f"Starting pipeline execution{config_desc}", quiet=args.quiet)
     
     for step in pipeline_steps:
         # Skip if explicitly requested or if already completed in a previous run
@@ -400,18 +341,120 @@ def main():
         if not run_step(step["command"], step["description"], step["id"], args.quiet, state_file, state):
             log_message(f"Pipeline failed at step: {step['id']}", level="ERROR", 
                        quiet=args.quiet, state_file=state_file, state=state)
-            return 1
+            return False
     
     # If we get here, all steps completed successfully
-    log_message("Pipeline completed successfully!", quiet=args.quiet)
+    log_message(f"Pipeline completed successfully{config_desc}!", quiet=args.quiet)
+    return True
+
+def main():
+    """Main function."""
+    args = parse_arguments()
+    
+    # Load configuration
+    full_config = config_loader.load_config(args.config)
+    
+    # Apply command-line configuration overrides
+    if args.enable_config:
+        for config_id in args.enable_config:
+            for cfg in full_config.get("configurations", []):
+                if cfg.get("id") == config_id:
+                    cfg["enabled"] = True
+    
+    if args.disable_config:
+        for config_id in args.disable_config:
+            for cfg in full_config.get("configurations", []):
+                if cfg.get("id") == config_id:
+                    cfg["enabled"] = False
+    
+    # Initialize state tracking if resume is enabled
+    state_file = None
+    state = None
+    
+    if args.resume or args.clean_state:
+        state_file = args.state_file
+        state = read_state_file(state_file)
+        
+        # Clean state if requested
+        if args.clean_state:
+            state = {
+                "last_run": datetime.now().isoformat(),
+                "config_hash": compute_config_hash(full_config),
+                "completed_steps": [],
+                "failed_step": None,
+                "error_message": None
+            }
+            write_state_file(state_file, state)
+            log_message(f"Cleaned state file: {state_file}", quiet=args.quiet)
+        
+        # Check if configuration has changed
+        if args.resume and state["config_hash"] and state["config_hash"] != compute_config_hash(full_config):
+            if not args.force_resume:
+                log_message("Configuration has changed since last run. Use --force-resume to ignore this warning.", 
+                           level="ERROR", quiet=args.quiet)
+                return 1
+            else:
+                log_message("Configuration has changed, but continuing due to --force-resume", 
+                           level="WARNING", quiet=args.quiet)
+        
+        # Update config hash
+        state["config_hash"] = compute_config_hash(full_config)
+        write_state_file(state_file, state)
+        
+        if args.resume and state["completed_steps"]:
+            log_message(f"Resuming pipeline. Completed steps: {', '.join(state['completed_steps'])}", quiet=args.quiet)
+            if state["failed_step"]:
+                log_message(f"Last failed step: {state['failed_step']}", quiet=args.quiet)
+                log_message(f"Error message: {state['error_message']}", quiet=args.quiet)
+    
+    # Step 1: Archive previous outputs (if not resuming or if not completed)
+    if not args.resume or 'archive' not in state["completed_steps"]:
+        if 'archive' not in args.skip_step:
+            archive_cmd = ["python", "src/archive_and_clean.py"]
+            if args.no_archive:
+                archive_cmd.append("--no-archive")
+            
+            if not run_step(archive_cmd, "Archiving previous outputs", 'archive', args.quiet, state_file, state):
+                log_message("Failed to archive previous outputs. Exiting.", level="ERROR", 
+                           quiet=args.quiet, state_file=state_file, state=state)
+                return 1
+        else:
+            log_message("Skipping: Archiving previous outputs (--skip-step archive)", quiet=args.quiet)
+    
+    # Get enabled configurations
+    enabled_configs = config_loader.get_enabled_configurations(full_config, args.configs)
+    
+    if not enabled_configs:
+        log_message("No enabled configurations found. Exiting.", level="ERROR", quiet=args.quiet)
+        return 1
+    
+    log_message(f"Found {len(enabled_configs)} enabled configurations", quiet=args.quiet)
+    
+    # Run each enabled configuration
+    success = True
+    for cfg in enabled_configs:
+        config_id = cfg.get("id", "unknown")
+        log_message(f"Running configuration: {config_id} - {cfg.get('description', '')}", quiet=args.quiet)
+        
+        # Merge global config with this configuration
+        merged_config = config_loader.deep_merge(full_config.get("global", {}), cfg)
+        
+        # Update with command line arguments
+        merged_config = config_loader.update_config_from_args(merged_config, args)
+        
+        # Run the pipeline steps with this configuration
+        if not run_pipeline_steps(merged_config, args, state_file, state, config_id):
+            success = False
+            log_message(f"Pipeline failed for configuration: {config_id}", level="ERROR", 
+                       quiet=args.quiet, state_file=state_file, state=state)
     
     # Clear the failed step if we completed successfully
-    if state_file and state:
+    if success and state_file and state:
         state["failed_step"] = None
         state["error_message"] = None
         write_state_file(state_file, state)
     
-    return 0
+    return 0 if success else 1
 
 if __name__ == "__main__":
     sys.exit(main())

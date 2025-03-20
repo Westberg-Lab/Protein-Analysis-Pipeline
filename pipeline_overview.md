@@ -88,26 +88,64 @@ The pipeline organizes outputs in a structured directory hierarchy:
 
 ## Configuration and Customization
 
-The pipeline is highly configurable through **pipeline_config.json** and command-line arguments. Key configuration options include:
+The pipeline is highly configurable through **pipeline_config.json** and command-line arguments. The configuration file now supports multiple configurations that can be run in a single pipeline execution.
+
+### Configuration Structure
+
+The configuration file has two main sections:
+
+1. **Global Settings**: Common settings shared across all configurations
+2. **Configurations**: Multiple specific configurations, each with its own settings
+
+```json
+{
+  "global": {
+    "directories": { ... },
+    "templates": { ... },
+    "visualization": { ... }
+  },
+  "configurations": [
+    {
+      "id": "standard",
+      "description": "Standard run without MSA",
+      "enabled": true,
+      "methods": {
+        "use_chai": true,
+        "use_boltz": true,
+        "use_msa": false,
+        "use_msa_dir": false
+      }
+    },
+    {
+      "id": "with_msa",
+      "description": "Run with MSA enabled",
+      "enabled": true,
+      "methods": {
+        "use_chai": true,
+        "use_boltz": true,
+        "use_msa": true,
+        "use_msa_dir": false
+      }
+    }
+  ]
+}
+```
+
+### Key Configuration Options
 
 - **Directories**: Paths for inputs, outputs, and intermediate files
 - **Methods**: Which prediction methods to use (CHAI, BOLTZ, MSA)
-  - By default, both CHAI and BOLTZ are enabled
-  - MSA is enabled by default, but the MSA directory option is disabled by default
 - **Templates**: Template files for structural comparison
 - **Visualization**: Parameters for heatmap visualizations
 
-Default configuration from pipeline_config.json:
-```json
-{
-  "methods": {
-    "use_chai": true,
-    "use_boltz": true,
-    "use_msa": true,
-    "use_msa_dir": false
-  }
-}
-```
+### Default Configurations
+
+By default, the pipeline includes two configurations:
+
+1. **standard**: Runs without MSA
+2. **with_msa**: Runs with MSA enabled
+
+This allows you to generate both MSA and non-MSA predictions in a single pipeline run, maintaining the existing directory structure that the plotting scripts rely on.
 
 ## Pipeline Execution
 
@@ -123,6 +161,9 @@ The pipeline supports a comprehensive set of command-line options for customizat
 
 #### Configuration Options
 - `--config CONFIG_FILE`: Specify a custom configuration file (default: pipeline_config.json)
+- `--configs CONFIG_IDS`: Comma-separated list of configuration IDs to run (default: all enabled)
+- `--enable-config CONFIG_ID`: Enable a specific configuration (can be used multiple times)
+- `--disable-config CONFIG_ID`: Disable a specific configuration (can be used multiple times)
 
 #### Archiving Options
 - `--no-archive`: Delete previous outputs without archiving
@@ -163,11 +204,20 @@ The pipeline supports a comprehensive set of command-line options for customizat
 ### Example Commands
 
 ```bash
-# Run with default settings
+# Run with default settings (both standard and with_msa configurations)
 python run_pipeline.py
 
-# Skip archiving and use only CHAI with MSA
-python run_pipeline.py --no-archive --use-chai --no-boltz --use-msa
+# Run only the standard configuration (without MSA)
+python run_pipeline.py --configs standard
+
+# Run only the with_msa configuration
+python run_pipeline.py --configs with_msa
+
+# Enable a specific configuration
+python run_pipeline.py --enable-config standard --disable-config with_msa
+
+# Skip archiving and use only CHAI
+python run_pipeline.py --no-archive --use-chai --no-boltz
 
 # Resume a failed pipeline run
 python run_pipeline.py --resume
@@ -183,3 +233,15 @@ python run_pipeline.py --chai-fasta custom_fasta --boltz-yaml custom_yaml --plot
 ```
 
 The pipeline uses state tracking, allowing it to resume from failures without rerunning completed steps. This is particularly useful for long-running predictions that may encounter temporary issues.
+
+### How It Works
+
+When you run the pipeline:
+
+1. It loads the configuration file and identifies enabled configurations
+2. For each enabled configuration, it:
+   - Merges global settings with configuration-specific settings
+   - Runs the pipeline steps with the merged configuration
+   - Maintains the existing directory structure (with or without _with_MSA suffix based on the configuration)
+
+This approach allows you to run both MSA and non-MSA predictions in a single pipeline run, while maintaining compatibility with the existing plotting scripts.
