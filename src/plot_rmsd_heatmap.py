@@ -129,8 +129,9 @@ def create_heatmap(df, output_file, config, quiet=False):
             all_methods = [m for m in all_methods if not m.startswith('chai')]
         if not config["methods"]["use_boltz"]:
             all_methods = [m for m in all_methods if not m.startswith('boltz')]
-        if not config["methods"]["use_msa"]:
-            all_methods = [m for m in all_methods if not '_with_MSA' in m]
+        
+        # Always include MSA methods regardless of the use_msa flag
+        # This ensures that MSA files are always included in the heatmap if they exist
         
         # Filter methods based on available data
         for method in all_methods:

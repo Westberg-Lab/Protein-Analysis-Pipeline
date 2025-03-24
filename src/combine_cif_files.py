@@ -43,18 +43,24 @@ def find_unique_names(chai_dir, boltz_dir, config, quiet=False):
     use_chai = config.get("methods", {}).get("use_chai", True)
     use_boltz = config.get("methods", {}).get("use_boltz", True)
     
-    # Get all directory names in CHAI (excluding _with_MSA directories)
+    # Always check for MSA directories regardless of the use_msa flag
+    # This ensures that MSA files are always included in the analysis if they exist
+    
+    # Get all directory names in CHAI
     chai_dirs = set()
     if use_chai and chai_dir.exists():
+        # Process all directories (both regular and MSA)
         for d in chai_dir.iterdir():
-            if d.is_dir() and not d.name.endswith('_with_MSA'):
+            if d.is_dir():
+                # Include all subdirectories
                 chai_dirs.update(subdir.name for subdir in d.iterdir() if subdir.is_dir())
     
-    # Get all directory names in BOLTZ (excluding _with_MSA directories)
+    # Get all directory names in BOLTZ
     boltz_dirs = set()
     if use_boltz and boltz_dir.exists():
+        # Process all directories (both regular and MSA)
         for d in boltz_dir.iterdir():
-            if d.is_dir() and not d.name.endswith('_with_MSA'):
+            if d.is_dir():
                 # Extract base names from boltz_results_ prefix
                 boltz_dirs.update(subdir.name.replace('boltz_results_', '') 
                                 for subdir in d.iterdir() 
@@ -100,6 +106,13 @@ def find_cif_file(base_dir, name, with_msa, model_idx, quiet=False):
     Returns:
         Path or None: Path to the CIF file if found, None otherwise
     """
+    # Debug logging
+    if not quiet:
+        print(f"\n--- Finding CIF file for {name} ---")
+        print(f"    Base directory: {base_dir}")
+        print(f"    With MSA: {with_msa}")
+        print(f"    Model index: {model_idx}")
+    
     # Load molecules from molecules.json
     try:
         with open("molecules.json", 'r') as f:
@@ -107,7 +120,7 @@ def find_cif_file(base_dir, name, with_msa, model_idx, quiet=False):
             molecule_1 = [mol[1] for mol in data["molecule_1"] if mol]  # Extract mol1_name
     except Exception as e:
         if not quiet:
-            print(f"Error loading molecules.json: {e}")
+            print(f"    Error loading molecules.json: {e}")
         molecule_1 = []
     
     # Find the parent directory by checking which molecule_1 is a prefix of the name
@@ -116,6 +129,9 @@ def find_cif_file(base_dir, name, with_msa, model_idx, quiet=False):
         if name.startswith(mol1_name + "_") or name == mol1_name:
             parent_dir = mol1_name
             break
+    
+    if not quiet:
+        print(f"    Parent directory determined to be: {parent_dir}")
     
     # Handle CHAI and BOLTZ differently
     if 'CHAI' in str(base_dir):
@@ -133,7 +149,11 @@ def find_cif_file(base_dir, name, with_msa, model_idx, quiet=False):
         
         # Check if file exists
         if cif_file.exists():
+            if not quiet:
+                print(f"    Found CIF file: {cif_file}")
             return cif_file
+        elif not quiet:
+            print(f"    CIF file not found: {cif_file}")
     else:
         if with_msa:
             search_dir = base_dir / f"{parent_dir}_with_MSA" / f"boltz_results_{name}"
@@ -146,6 +166,11 @@ def find_cif_file(base_dir, name, with_msa, model_idx, quiet=False):
         # For BOLTZ, check in predictions/[name]/[name]_model_0.cif
         predictions_dir = search_dir / "predictions"
         
+        if not quiet:
+            print(f"    Looking in predictions directory: {predictions_dir}")
+            if not predictions_dir.exists():
+                print(f"    Predictions directory does not exist")
+        
         # First try the expected path with name
         name_dir = predictions_dir / name
         if name_dir.exists() and name_dir.is_dir():
@@ -154,7 +179,11 @@ def find_cif_file(base_dir, name, with_msa, model_idx, quiet=False):
                 print(f"    Looking for BOLTZ file: {cif_file}")
             
             if cif_file.exists():
+                if not quiet:
+                    print(f"    Found CIF file: {cif_file}")
                 return cif_file
+            elif not quiet:
+                print(f"    CIF file not found: {cif_file}")
         
         # If not found, check all subdirectories in predictions/
         if predictions_dir.exists() and predictions_dir.is_dir():
@@ -168,8 +197,14 @@ def find_cif_file(base_dir, name, with_msa, model_idx, quiet=False):
                     if not quiet:
                         print(f"    Looking for BOLTZ file: {cif_file}")
                     if cif_file.exists():
+                        if not quiet:
+                            print(f"    Found CIF file: {cif_file}")
                         return cif_file
+                    elif not quiet:
+                        print(f"    CIF file not found: {cif_file}")
     
+    if not quiet:
+        print(f"    No CIF file found for {name}")
     return None
 
 def create_pse_files(unique_names, chai_dir, boltz_dir, template_file, model_idx, output_dir, config, quiet=False):
@@ -179,6 +214,14 @@ def create_pse_files(unique_names, chai_dir, boltz_dir, template_file, model_idx
     
     # List to store RMSD values
     rmsd_values = []
+    
+    # Ensure methods section exists in config
+    if "methods" not in config:
+        config["methods"] = {}
+    
+    # Always set use_msa to True to ensure MSA files are included in the RMSD values
+    # This is separate from the auto-detection in main() and ensures MSA files are always processed
+    config["methods"]["use_msa"] = True
     
     # Ensure output directory exists
     output_dir = Path(output_dir)
@@ -271,8 +314,8 @@ def create_pse_files(unique_names, chai_dir, boltz_dir, template_file, model_idx
             elif not quiet:
                 print(f"  Warning: CHAI file for {name} (without MSA) not found")
         
-        # CHAI with MSA
-        if config["methods"]["use_chai"] and config["methods"]["use_msa"]:
+        # CHAI with MSA - Always try to load MSA files regardless of the use_msa flag
+        if config["methods"]["use_chai"]:
             chai_msa_file = find_cif_file(chai_dir, name, True, model_idx, quiet)
             if chai_msa_file:
                 structure_name = f'chai_msa_{sanitized_name}'
@@ -317,8 +360,8 @@ def create_pse_files(unique_names, chai_dir, boltz_dir, template_file, model_idx
             elif not quiet:
                 print(f"  Warning: BOLTZ file for {name} (without MSA) not found")
         
-        # BOLTZ with MSA
-        if config["methods"]["use_boltz"] and config["methods"]["use_msa"]:
+        # BOLTZ with MSA - Always try to load MSA files regardless of the use_msa flag
+        if config["methods"]["use_boltz"]:
             boltz_msa_file = find_cif_file(boltz_dir, name, True, model_idx, quiet)
             if boltz_msa_file:
                 structure_name = f'boltz_msa_{sanitized_name}'
@@ -356,11 +399,11 @@ def create_pse_files(unique_names, chai_dir, boltz_dir, template_file, model_idx
         loaded_structures = []
         if config["methods"]["use_chai"] and 'chai_file' in locals() and chai_file:
             loaded_structures.append(f'chai_{sanitized_name}')
-        if config["methods"]["use_chai"] and config["methods"]["use_msa"] and 'chai_msa_file' in locals() and chai_msa_file:
+        if config["methods"]["use_chai"] and 'chai_msa_file' in locals() and chai_msa_file:
             loaded_structures.append(f'chai_msa_{sanitized_name}')
         if config["methods"]["use_boltz"] and 'boltz_file' in locals() and boltz_file:
             loaded_structures.append(f'boltz_{sanitized_name}')
-        if config["methods"]["use_boltz"] and config["methods"]["use_msa"] and 'boltz_msa_file' in locals() and boltz_msa_file:
+        if config["methods"]["use_boltz"] and 'boltz_msa_file' in locals() and boltz_msa_file:
             loaded_structures.append(f'boltz_msa_{sanitized_name}')
         
         for structure in loaded_structures:
@@ -474,6 +517,35 @@ def main():
     
     # Update with command-line arguments
     config = config_loader.update_config_from_args(config, args)
+    
+    # Get directories from config
+    chai_dir = Path(config.get("directories", {}).get("chai_output", "OUTPUT/CHAI"))
+    boltz_dir = Path(config.get("directories", {}).get("boltz_output", "OUTPUT/BOLTZ"))
+    
+    # Auto-detect MSA directories
+    chai_msa_dirs = [d for d in chai_dir.iterdir() if d.is_dir() and d.name.endswith('_with_MSA')] if chai_dir.exists() else []
+    boltz_msa_dirs = [d for d in boltz_dir.iterdir() if d.is_dir() and d.name.endswith('_with_MSA')] if boltz_dir.exists() else []
+    
+    # If MSA directories exist, set use_msa to True
+    if chai_msa_dirs or boltz_msa_dirs:
+        if "methods" not in config:
+            config["methods"] = {}
+        
+        # Only override if not explicitly set to False by command line
+        if not (hasattr(args, 'use_msa') and args.use_msa is False):
+            config["methods"]["use_msa"] = True
+            print(f"Auto-detected MSA directories, setting use_msa=True")
+    
+    # Print MSA configuration
+    print(f"MSA Configuration: use_msa={config.get('methods', {}).get('use_msa', False)}")
+    
+    # If verbose, print details about MSA directories
+    if not args.quiet and (chai_msa_dirs or boltz_msa_dirs):
+        print(f"Found MSA directories:")
+        for d in chai_msa_dirs:
+            print(f"  - {d}")
+        for d in boltz_msa_dirs:
+            print(f"  - {d}")
     
     # Get directories from config
     # Handle both old and new configuration structures
