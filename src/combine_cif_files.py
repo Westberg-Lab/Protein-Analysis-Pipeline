@@ -361,22 +361,33 @@ def create_pse_files(unique_names, chai_dir, boltz_dir, template_file, model_idx
 
 def get_templates(config, args):
     """Get all template files from configuration or command line arguments."""
+    # Get templates directory from config
+    if "directories" in config and "templates" in config["directories"]:
+        templates_dir = Path(config["directories"]["templates"])
+    else:
+        templates_dir = Path("templates")  # Default to templates directory
+    
     if args.template:
-        return [Path(args.template)]
+        # If template is specified in command line, use it directly
+        template_path = Path(args.template)
+        # If it's a relative path and doesn't exist, try prepending templates_dir
+        if not template_path.is_absolute() and not template_path.exists():
+            template_path = templates_dir / template_path
+        return [template_path]
     
     # Handle both old and new configuration structures
     if "templates" in config:
         # Old configuration structure
         if "files" in config["templates"]:
-            return [Path(template) for template in config["templates"]["files"]]
+            return [templates_dir / template for template in config["templates"]["files"]]
         elif "default_template" in config["templates"]:
-            return [Path(config["templates"]["default_template"])]
+            return [templates_dir / config["templates"]["default_template"]]
     else:
         # New configuration structure
         if "files" in config:
-            return [Path(template) for template in config["files"]]
+            return [templates_dir / template for template in config["files"]]
         elif "default_template" in config:
-            return [Path(config["default_template"])]
+            return [templates_dir / config["default_template"]]
     
     return []
 

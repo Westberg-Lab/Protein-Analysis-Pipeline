@@ -7,7 +7,8 @@
       "boltz_output": "OUTPUT/BOLTZ",
       "pse_files": "PSE_FILES",
       "plots": "plots",
-      "csv": "csv"
+      "csv": "csv",
+      "templates": "templates"
     },
     "templates": {
       "files": [
@@ -28,14 +29,6 @@
           "residues": [45, 46, 47, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100],
           "chain": "A",
           "color": "magenta"
-        },
-        {
-          "id": "active_site",
-          "description": "Catalytic active site",
-          "molecules": ["hM1Dshort_8E9X", "hM3Dshort_8E9W", "hM4Dshort_8E9X"],
-          "residues": [120, 121, 122, 123, 124, 125],
-          "chain": "A",
-          "color": "cyan"
         }
       ]
     }
@@ -79,15 +72,6 @@
       "source_predictions": ["standard", "with_msa"],
       "analysis_type": "motif",
       "motif_id": "binding_pocket",
-      "metrics": ["rmsd", "plddt"]
-    },
-    {
-      "id": "active_site_analysis",
-      "description": "Active site motif analysis",
-      "enabled": true,
-      "source_predictions": ["standard", "with_msa"],
-      "analysis_type": "motif",
-      "motif_id": "active_site",
       "metrics": ["rmsd", "plddt"]
     }
   ]

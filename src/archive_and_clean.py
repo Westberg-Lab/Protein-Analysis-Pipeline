@@ -3,15 +3,16 @@
 Script to archive previous outputs and create fresh directories for new runs.
 
 This script:
-1. Creates a timestamped archive directory
-2. Moves previous output directories and files to the archive
+1. Creates a timestamped archive directory (unless --no-archive is specified)
+2. Moves previous output directories and files to the archive (or deletes them if --delete-outputs is specified)
 3. Creates fresh empty directories for a new run
 
 Usage:
-    python archive_and_clean.py [--no-archive]
+    python archive_and_clean.py [--no-archive] [--delete-outputs]
 
 Options:
-    --no-archive    Delete previous outputs without archiving
+    --no-archive       Skip archiving previous outputs (keep existing files)
+    --delete-outputs   Delete previous outputs without archiving
 """
 
 import os
@@ -24,6 +25,8 @@ def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description='Archive previous outputs and create fresh directories.')
     parser.add_argument('--no-archive', action='store_true',
+                        help='Skip archiving previous outputs (keep existing files)')
+    parser.add_argument('--delete-outputs', action='store_true',
                         help='Delete previous outputs without archiving')
     return parser.parse_args()
 
@@ -175,12 +178,12 @@ def main():
         "pipeline_config.json"
     ]
     
-    if args.no_archive:
+    if args.delete_outputs:
         # Delete without archiving
         print("Deleting previous outputs without archiving...")
         delete_directories(dirs_to_handle)
         delete_files(files_to_handle)
-    else:
+    elif not args.no_archive:
         # Create archive directory
         archive_dir = create_archive_directory()
         
@@ -192,6 +195,8 @@ def main():
         # Copy configuration files
         print("Copying configuration files to archive...")
         copy_config_files(archive_dir, config_files_to_copy)
+    else:
+        print("Skipping archive step (keeping existing files)...")
     
     # Create fresh directories
     print("\nCreating fresh directories for new run...")

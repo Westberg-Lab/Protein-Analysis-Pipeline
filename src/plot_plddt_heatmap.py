@@ -113,23 +113,27 @@ def get_boltz_identifier_from_path(file_path, boltz_dir):
         
         # The structure is typically:
         # OUTPUT/BOLTZ/[folder_name]/boltz_results_[base_name]/predictions/[name]/confidence_[name]_model_0.json
+        # or for MSA:
+        # OUTPUT/BOLTZ/[folder_name]_with_MSA/boltz_results_[base_name]/predictions/[name]/confidence_[name]_model_0.json
         
         # Check if this is a with_MSA path
         is_msa = False
         subfolder = ""
         
-        if len(parts) >= 2:
-            results_dir = parts[1]  # e.g., boltz_results_KORDshort_Arodyn1-6_with_MSA
-            if '_with_MSA' in results_dir:
+        if len(parts) >= 1:
+            folder_name = parts[0]  # e.g., KORDshort or KORDshort_with_MSA
+            
+            # Check if this is an MSA path
+            if folder_name.endswith('_with_MSA'):
                 is_msa = True
+        
+        if len(parts) >= 2:
+            results_dir = parts[1]  # e.g., boltz_results_KORDshort_Arodyn1-6
             
             # Extract the base name from boltz_results_[base_name]
             if results_dir.startswith('boltz_results_'):
                 # Remove boltz_results_ prefix
                 subfolder = results_dir[len('boltz_results_'):]
-                # Remove _with_MSA suffix if present
-                if subfolder.endswith('_with_MSA'):
-                    subfolder = subfolder[:-9]  # Remove _with_MSA
         
         return (is_msa, subfolder)
     except ValueError:
@@ -182,15 +186,16 @@ def organize_data(chai_files, boltz_files, chai_dir, boltz_dir, prediction_runs,
             for file_path in chai_files:
                 is_msa, subfolder = get_chai_identifier_from_path(file_path, chai_dir)
                 
-                # Skip MSA files if MSA is disabled for this run
-                if is_msa and not methods.get("use_msa", False):
+                # Skip files that don't match the run's MSA configuration
+                if is_msa != methods.get("use_msa", False):
                     continue
                     
                 plddt = extract_chai_plddt(file_path)
                 
                 if plddt is not None and subfolder:
-                    # Determine the method based on whether it's MSA or not
-                    method = f'chai_with_MSA_{run_id}' if is_msa else f'chai_{run_id}'
+                    # Use simple, consistent method names
+                    method = 'chai_msa' if is_msa else 'chai'
+                    
                     # Store the pLDDT value
                     data[subfolder][method] = plddt
         
@@ -202,15 +207,16 @@ def organize_data(chai_files, boltz_files, chai_dir, boltz_dir, prediction_runs,
             for file_path in boltz_files:
                 is_msa, subfolder = get_boltz_identifier_from_path(file_path, boltz_dir)
                 
-                # Skip MSA files if MSA is disabled for this run
-                if is_msa and not methods.get("use_msa", False):
+                # Skip files that don't match the run's MSA configuration
+                if is_msa != methods.get("use_msa", False):
                     continue
                     
                 plddt = extract_boltz_plddt(file_path)
                 
                 if plddt is not None and subfolder:
-                    # Determine the method based on whether it's MSA or not
-                    method = f'boltz_with_MSA_{run_id}' if is_msa else f'boltz_{run_id}'
+                    # Use simple, consistent method names
+                    method = 'boltz_msa' if is_msa else 'boltz'
+                    
                     # Store the pLDDT value
                     data[subfolder][method] = plddt
     

@@ -9,7 +9,7 @@ This script:
 4. Handles errors and provides status updates
 
 Usage:
-    python run_pipeline.py [--config CONFIG_FILE] [--no-archive] [--skip-step STEP]
+    python run_pipeline.py [--config CONFIG_FILE] [--no-archive] [--delete-outputs] [--skip-step STEP]
                           [--use-chai] [--no-chai] [--use-boltz] [--no-boltz]
                           [--use-msa] [--no-msa] [--use-msa-dir]
                           [--template TEMPLATE_FILE] [--model-idx N]
@@ -18,7 +18,8 @@ Usage:
 
 Options:
     --config CONFIG_FILE  Configuration file (default: pipeline_config.json)
-    --no-archive          Delete previous outputs without archiving
+    --no-archive          Skip archiving previous outputs (keep existing files)
+    --delete-outputs      Delete previous outputs without archiving
     --skip-step STEP      Skip a specific step (chai-fasta, boltz-yaml, chai-run, 
                          boltz-run, combine-cif, rmsd-plot, plddt-plot,
                          motif-align, motif-rmsd, motif-plddt)
@@ -67,6 +68,8 @@ def parse_arguments():
     parser.add_argument('--config', type=str, default='pipeline_config.json',
                         help='Configuration file (default: pipeline_config.json)')
     parser.add_argument('--no-archive', action='store_true',
+                        help='Skip archiving previous outputs (keep existing files)')
+    parser.add_argument('--delete-outputs', action='store_true',
                         help='Delete previous outputs without archiving')
     parser.add_argument('--skip-step', action='append', default=[],
                         choices=PIPELINE_STEPS,
@@ -589,6 +592,8 @@ def main():
             archive_cmd = ["python", "src/archive_and_clean.py"]
             if args.no_archive:
                 archive_cmd.append("--no-archive")
+            if args.delete_outputs:
+                archive_cmd.append("--delete-outputs")
             
             if not run_step(archive_cmd, "Archiving previous outputs", 'archive', args.quiet, state_file, state):
                 log_message("Failed to archive previous outputs. Exiting.", level="ERROR", 
