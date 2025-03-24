@@ -269,7 +269,12 @@ def main():
     args = parse_arguments()
     
     # Load configuration
-    config = config_loader.load_config()
+    full_config = config_loader.load_config()
+    
+    # Get a merged configuration (combines global settings with a prediction run)
+    config = config_loader.get_merged_config(full_config)
+    
+    # Update with command-line arguments
     config = config_loader.update_config_from_args(config, args)
     
     # Get directories from config
@@ -296,7 +301,12 @@ def main():
             print(f"Created directory: {csv_dir}")
     
     # Get all templates from configuration
+    # First try to get templates from the merged config
     templates = get_templates(config)
+    
+    # If no templates found, try to get them from the global config
+    if not templates and "global" in full_config and "templates" in full_config["global"]:
+        templates = get_templates(full_config["global"])
     if not templates:
         print("No templates found in configuration.")
         return

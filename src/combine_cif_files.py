@@ -26,6 +26,7 @@ import pymol
 from pymol import cmd
 from pathlib import Path
 import config_loader
+import json
 
 def parse_arguments():
     """Parse command line arguments."""
@@ -81,14 +82,40 @@ def sanitize_name(name):
     return sanitized
 
 def find_cif_file(base_dir, name, with_msa, model_idx, quiet=False):
-    """Find the CIF file in the specified directory."""
-    # Determine the parent directory name
-    # For names like KORDshort_WT_SalB, the parent dir is KORDshort_WT
-    # For names like KORDshort_SalB, the parent dir is KORDshort
-    if name.startswith("KORDshort_WT"):
-        parent_dir = "KORDshort_WT"
-    else:
-        parent_dir = "KORDshort"
+    """
+    Find the CIF file in the specified directory.
+    
+    This function determines the parent directory by checking which molecule from
+    molecule_1 in molecules.json is a prefix of the given name. This approach is
+    more robust than parsing based on underscores, as it handles cases where
+    molecule names themselves contain underscores.
+    
+    Args:
+        base_dir (Path): Base directory to search in (CHAI or BOLTZ output)
+        name (str): Name of the molecule combination (e.g., hM1Dshort_8E9X_MT3)
+        with_msa (bool): Whether to look in the _with_MSA directory
+        model_idx (int): Model index to search for
+        quiet (bool): Whether to suppress detailed output
+        
+    Returns:
+        Path or None: Path to the CIF file if found, None otherwise
+    """
+    # Load molecules from molecules.json
+    try:
+        with open("molecules.json", 'r') as f:
+            data = json.load(f)
+            molecule_1 = [mol[1] for mol in data["molecule_1"] if mol]  # Extract mol1_name
+    except Exception as e:
+        if not quiet:
+            print(f"Error loading molecules.json: {e}")
+        molecule_1 = []
+    
+    # Find the parent directory by checking which molecule_1 is a prefix of the name
+    parent_dir = name  # Default to the full name
+    for mol1_name in molecule_1:
+        if name.startswith(mol1_name + "_") or name == mol1_name:
+            parent_dir = mol1_name
+            break
     
     # Handle CHAI and BOLTZ differently
     if 'CHAI' in str(base_dir):
@@ -101,16 +128,15 @@ def find_cif_file(base_dir, name, with_msa, model_idx, quiet=False):
         if not quiet:
             print(f"    Searching in: {search_dir}")
         
-        # Look for the CIF file
+        # Look for the CIF file with the correct model_idx
         cif_file = search_dir / f"pred.model_idx_{model_idx}.cif"
         
         # Check if file exists
         if cif_file.exists():
             return cif_file
     else:
-        # BOLTZ files have a different structure
         if with_msa:
-            search_dir = base_dir / parent_dir / f"boltz_results_{name}_with_MSA"
+            search_dir = base_dir / f"{parent_dir}_with_MSA" / f"boltz_results_{name}"
         else:
             search_dir = base_dir / parent_dir / f"boltz_results_{name}"
         
@@ -359,7 +385,7 @@ def create_pse_files(unique_names, chai_dir, boltz_dir, template_file, model_idx
     # Return the RMSD values, reference name, and template directory
     return rmsd_values, reference_name, template_dir
 
-def get_templates(config, args):
+def get_templates(config, args, full_config=None):
     """Get all template files from configuration or command line arguments."""
     # Get templates directory from config
     if "directories" in config and "templates" in config["directories"]:
@@ -388,6 +414,13 @@ def get_templates(config, args):
             return [templates_dir / template for template in config["files"]]
         elif "default_template" in config:
             return [templates_dir / config["default_template"]]
+    
+    # If no templates found and full_config is provided, try to get them from the global config
+    if full_config and "global" in full_config and "templates" in full_config["global"]:
+        if "files" in full_config["global"]["templates"]:
+            return [templates_dir / template for template in full_config["global"]["templates"]["files"]]
+        elif "default_template" in full_config["global"]["templates"]:
+            return [templates_dir / full_config["global"]["templates"]["default_template"]]
     
     return []
 
@@ -434,7 +467,12 @@ def main():
     args = parse_arguments()
     
     # Load configuration
-    config = config_loader.load_config()
+    full_config = config_loader.load_config()
+    
+    # Get a merged configuration (combines global settings with a prediction run)
+    config = config_loader.get_merged_config(full_config)
+    
+    # Update with command-line arguments
     config = config_loader.update_config_from_args(config, args)
     
     # Get directories from config
@@ -472,7 +510,7 @@ def main():
             print(f"Created directory: {csv_dir}")
     
     # Get all templates from configuration or command line arguments
-    templates = get_templates(config, args)
+    templates = get_templates(config, args, full_config)
     if not templates:
         print("No templates found in configuration or command line arguments.")
         return
