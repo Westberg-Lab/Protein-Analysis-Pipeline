@@ -194,11 +194,16 @@ def main():
     args = parse_arguments()
     
     # Load configuration
-    config = config_loader.load_config()
+    full_config = config_loader.load_config()
+    
+    # Get a merged configuration (combines global settings with a prediction run)
+    config = config_loader.get_merged_config(full_config)
+    
+    # Update with command-line arguments
     config = config_loader.update_config_from_args(config, args)
     
     # Get motif definition
-    motif_def = config_loader.get_motif_definition(config, args.motif)
+    motif_def = config_loader.get_motif_definition(full_config, args.motif)
     if not motif_def:
         print(f"Error: Motif '{args.motif}' not found in configuration")
         return
@@ -209,13 +214,21 @@ def main():
         print(f"Error: No molecules specified for motif '{args.motif}'")
         return
     
-    # Determine output directory
-    csv_dir = Path(config["directories"]["csv"])
-    csv_dir.mkdir(exist_ok=True)
-    
     # Get directories from config
-    chai_dir = Path(config["directories"]["chai_output"])
-    boltz_dir = Path(config["directories"]["boltz_output"])
+    # Handle both old and new configuration structures
+    if "directories" in config:
+        # Old configuration structure
+        csv_dir = Path(config["directories"]["csv"])
+        chai_dir = Path(config["directories"]["chai_output"])
+        boltz_dir = Path(config["directories"]["boltz_output"])
+    else:
+        # New configuration structure
+        csv_dir = Path(config.get("csv", "csv"))
+        chai_dir = Path(config.get("chai_output", "OUTPUT/CHAI"))
+        boltz_dir = Path(config.get("boltz_output", "OUTPUT/BOLTZ"))
+    
+    # Create output directory
+    csv_dir.mkdir(exist_ok=True)
     
     # Process each molecule
     all_plddt_values = []

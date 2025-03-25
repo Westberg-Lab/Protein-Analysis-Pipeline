@@ -17,17 +17,6 @@ from pathlib import Path
 import json
 import config_loader
 
-def parse_arguments():
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description='Perform motif-specific alignment and RMSD calculation.')
-    parser.add_argument('--motif', type=str, required=True,
-                        help='Motif ID to use for alignment')
-    
-    # Add common arguments, excluding the motif argument
-    parser = config_loader.add_common_args(parser, exclude=['motif'])
-    
-    return parser.parse_args()
-
 def find_pse_files_for_molecule(pse_dir, molecule_name):
     """Find PSE files that contain the specified molecule."""
     pse_files = []
@@ -43,7 +32,7 @@ def find_pse_files_for_molecule(pse_dir, molecule_name):
     
     return pse_files
 
-def process_pse_file(pse_file, motif_def, molecule, output_dir, quiet=False):
+def process_pse_file(pse_file, motif_def, molecule, output_dir, quiet=False, motif_pse_dir=None):
     """Process a PyMOL session file for motif-specific alignment."""
     # Reset PyMOL
     cmd.reinitialize()
@@ -128,22 +117,85 @@ def process_pse_file(pse_file, motif_def, molecule, output_dir, quiet=False):
         except pymol.CmdException as e:
             print(f"  Error aligning {obj}: {e}")
     
+    # Save motif-aligned PSE file if requested
+    if motif_pse_dir is not None:
+        # Create a visually enhanced representation of the motif regions
+        
+        # Hide everything first
+        cmd.hide("everything")
+        
+        # Show the full proteins as transparent cartoons for context
+        cmd.show("cartoon", "all")
+        cmd.set("cartoon_transparency", 0.7, "all")
+        
+        # Get the list of residue numbers
+        residue_list = ','.join(str(r) for r in motif_def.get("residues", []))
+        chain = motif_def.get("chain", "A")
+        
+        # Process each object (template and predictions)
+        all_objects = [template_obj] + [obj for obj in objects if obj != template_obj]
+        
+        for obj in all_objects:
+            # Create a selection for this object's motif
+            motif_sel_name = f"{obj}_motif"
+            cmd.select(motif_sel_name, f"{obj} and chain {chain} and resi {residue_list}")
+            
+            # Show as sticks only (no spheres)
+            cmd.show("sticks", motif_sel_name)
+            
+            # No need to set colors - the motif will inherit the color from the parent object
+            
+            if not quiet:
+                print(f"  Showing motif for {obj} as sticks with original color")
+        
+        # Save the aligned session
+        motif_pse_file = motif_pse_dir / f"{pse_file.stem}_motif_{motif_def.get('id')}.pse"
+        cmd.save(str(motif_pse_file))
+        
+        if not quiet:
+            print(f"  Saved motif-aligned session to {motif_pse_file}")
+        
+        # Clean up the selections
+        for obj in all_objects:
+            cmd.delete(f"{obj}_motif")
+    
     # Clean up selections
     cmd.delete("template_motif")
     cmd.delete("pred_motif")
+    cmd.delete("all_motifs")
     
     return rmsd_values
+
+def parse_arguments():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description='Perform motif-specific alignment and RMSD calculation.')
+    parser.add_argument('--motif', type=str, required=True,
+                        help='Motif ID to use for alignment')
+    parser.add_argument('--save-motif-pse', action='store_true', default=True,
+                        help='Save motif-aligned PSE files (default: True)')
+    parser.add_argument('--no-save-motif-pse', dest='save_motif_pse', action='store_false',
+                        help='Do not save motif-aligned PSE files')
+    
+    # Add common arguments, excluding the motif argument
+    parser = config_loader.add_common_args(parser, exclude=['motif'])
+    
+    return parser.parse_args()
 
 def main():
     """Main function."""
     args = parse_arguments()
     
     # Load configuration
-    config = config_loader.load_config()
+    full_config = config_loader.load_config()
+    
+    # Get a merged configuration (combines global settings with a prediction run)
+    config = config_loader.get_merged_config(full_config)
+    
+    # Update with command-line arguments
     config = config_loader.update_config_from_args(config, args)
     
     # Get motif definition
-    motif_def = config_loader.get_motif_definition(config, args.motif)
+    motif_def = config_loader.get_motif_definition(full_config, args.motif)
     if not motif_def:
         print(f"Error: Motif '{args.motif}' not found in configuration")
         return
@@ -154,15 +206,32 @@ def main():
         print(f"Error: No molecules specified for motif '{args.motif}'")
         return
     
-    # Determine PSE files directory
-    pse_dir = Path(config["directories"]["pse_files"])
+    # Get directories from config
+    # Handle both old and new configuration structures
+    if "directories" in config:
+        # Old configuration structure
+        pse_dir = Path(config["directories"]["pse_files"])
+        csv_dir = Path(config["directories"]["csv"])
+    else:
+        # New configuration structure
+        pse_dir = Path(config.get("pse_files", "PSE_FILES"))
+        csv_dir = Path(config.get("csv", "csv"))
+    
     if not pse_dir.exists():
         print(f"Error: PSE files directory {pse_dir} does not exist")
         return
     
-    # Determine output directory
-    csv_dir = Path(config["directories"]["csv"])
+    # Create output directories
     csv_dir.mkdir(exist_ok=True)
+    
+    # Create directory for motif-aligned PSE files if saving is enabled
+    if args.save_motif_pse:
+        motif_pse_dir = pse_dir / "motifs" / args.motif
+        motif_pse_dir.mkdir(parents=True, exist_ok=True)
+        if not args.quiet:
+            print(f"Created directory for motif-aligned PSE files: {motif_pse_dir}")
+    else:
+        motif_pse_dir = None
     
     # Process each molecule
     all_rmsd_values = []
@@ -182,7 +251,7 @@ def main():
         
         # Process each PSE file
         for pse_file in pse_files:
-            rmsd_values = process_pse_file(pse_file, motif_def, molecule, csv_dir, args.quiet)
+            rmsd_values = process_pse_file(pse_file, motif_def, molecule, csv_dir, args.quiet, motif_pse_dir)
             if rmsd_values:
                 all_rmsd_values.extend(rmsd_values)
     

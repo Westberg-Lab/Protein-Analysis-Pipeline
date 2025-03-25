@@ -24,7 +24,7 @@ def parse_arguments():
     
     return parser.parse_args()
 
-def create_motif_heatmap(df, motif_id, output_file, config, quiet=False):
+def create_motif_heatmap(df, motif_id, output_file, config, full_config, quiet=False):
     """Create a heatmap visualization of motif-specific pLDDT values."""
     # Filter for the specific motif
     motif_df = df[df['motif'] == motif_id]
@@ -35,7 +35,7 @@ def create_motif_heatmap(df, motif_id, output_file, config, quiet=False):
         return False
     
     # Get motif definition
-    motif_def = config_loader.get_motif_definition(config, motif_id)
+    motif_def = config_loader.get_motif_definition(full_config, motif_id)
     motif_desc = motif_id
     if motif_def:
         motif_desc = motif_def.get("description", motif_id)
@@ -52,8 +52,7 @@ def create_motif_heatmap(df, motif_id, output_file, config, quiet=False):
         all_methods = [m for m in all_methods if not m.startswith('chai')]
     if not config.get("methods", {}).get("use_boltz", True):
         all_methods = [m for m in all_methods if not m.startswith('boltz')]
-    if not config.get("methods", {}).get("use_msa", True):
-        all_methods = [m for m in all_methods if not '_with_MSA' in m]
+    # Always include MSA methods regardless of the use_msa flag
     
     # Filter methods based on available data
     for method in all_methods:
@@ -105,17 +104,30 @@ def main():
     args = parse_arguments()
     
     # Load configuration
-    config = config_loader.load_config()
+    full_config = config_loader.load_config()
+    
+    # Get a merged configuration (combines global settings with a prediction run)
+    config = config_loader.get_merged_config(full_config)
+    
+    # Update with command-line arguments
     config = config_loader.update_config_from_args(config, args)
     
-    # Determine input directory
-    csv_dir = Path(config["directories"]["csv"])
+    # Get directories from config
+    # Handle both old and new configuration structures
+    if "directories" in config:
+        # Old configuration structure
+        csv_dir = Path(config["directories"]["csv"])
+        plots_dir = Path(config["directories"]["plots"])
+    else:
+        # New configuration structure
+        csv_dir = Path(config.get("csv", "csv"))
+        plots_dir = Path(config.get("plots", "plots"))
+    
     if not csv_dir.exists():
         print(f"Error: CSV directory {csv_dir} does not exist")
         return
     
-    # Determine output directory
-    plots_dir = Path(config["directories"]["plots"])
+    # Create output directory
     plots_dir.mkdir(exist_ok=True)
     
     # Find all motif pLDDT CSV files
@@ -162,7 +174,7 @@ def main():
     # Create heatmap for each motif
     for motif_id in motifs:
         output_file = plots_dir / f'motif_plddt_heatmap_{motif_id}.png'
-        create_motif_heatmap(combined_df, motif_id, output_file, config, args.quiet)
+        create_motif_heatmap(combined_df, motif_id, output_file, config, full_config, args.quiet)
 
 if __name__ == "__main__":
     main()

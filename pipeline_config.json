@@ -26,7 +26,7 @@
           "id": "binding_pocket",
           "description": "Ligand binding pocket residues",
           "molecules": ["hM1Dshort_8E9X", "hM3Dshort_8E9W", "hM4Dshort_8E9X"],
-          "residues": [45, 46, 47, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100],
+          "residues": [112, 113, 116, 117, 120, 164, 196, 199, 200, 203, 204, 413, 416, 417, 420, 439, 442, 443],
           "chain": "A",
           "color": "magenta"
         }
