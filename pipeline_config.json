@@ -10,12 +10,6 @@
       "csv": "csv",
       "templates": "templates"
     },
-    "templates": {
-      "files": [
-        "hM3Dq_DCZ.cif"
-      ],
-      "model_idx": 4
-    },
     "visualization": {
       "rmsd_vmin": 0.2,
       "rmsd_vmax": 6.2
@@ -23,13 +17,44 @@
     "motifs": {
       "definitions": [
         {
+          "id": "whole_protein_hM1D",
+          "description": "Complete protein structure for hM1Dshort_8E9X",
+          "molecules": ["hM1Dshort_8E9X"],
+          "whole_protein": true,
+          "chain": "A",
+          "color": "cyan",
+          "template": "templates/hMD_template_8E9X.cif",
+          "model_idx": 4
+        },
+        {
+          "id": "whole_protein_hM3D",
+          "description": "Complete protein structure for hM3Dshort_8E9W",
+          "molecules": ["hM3Dshort_8E9W"],
+          "whole_protein": true,
+          "chain": "A",
+          "color": "cyan",
+          "template": "templates/hM3D_template_8E9W.cif",
+          "model_idx": 4
+        },
+        {
+          "id": "whole_protein_hM4D",
+          "description": "Complete protein structure for hM4Dshort_",
+          "molecules": ["hM4Dshort_8E9X"],
+          "whole_protein": true,
+          "chain": "A",
+          "color": "cyan",
+          "template": "templates/hMD_template_8E9X.cif",
+          "model_idx": 4
+        },
+        {
           "id": "binding_pocket_hM1D",
           "description": "Ligand binding pocket residues for hM1Dshort_8E9X",
           "molecules": ["hM1Dshort_8E9X"],
           "residues": [112, 113, 116, 117, 120, 164, 196, 199, 200, 203, 204, 413, 416, 417, 420, 439, 442, 443],
           "chain": "A",
           "color": "magenta",
-          "template": "templates/hM1D_template.cif"
+          "template": "templates/hMD_template_8E9X.cif",
+          "model_idx": 4
         },
         {
           "id": "binding_pocket_hM3D",
@@ -38,16 +63,18 @@
           "residues": [125, 126, 129, 130, 133, 177, 209, 212, 213, 216, 217, 426, 429, 430, 433, 452, 455, 456],
           "chain": "A",
           "color": "magenta",
-          "template": "templates/hM3D_template.cif"
+          "template": "templates/hM3D_template.cif",
+          "model_idx": 4
         },
         {
           "id": "binding_pocket_hM4D",
-          "description": "Ligand binding pocket residues for hM4Dshort_8E9X",
+          "description": "Ligand binding pocket residues for hM4Dshort_",
           "molecules": ["hM4Dshort_8E9X"],
           "residues": [118, 119, 122, 123, 126, 170, 202, 205, 206, 209, 210, 419, 422, 423, 426, 445, 448, 449],
           "chain": "A",
           "color": "magenta",
-          "template": "templates/hM4D_template.cif"
+          "template": "templates/hM3D_template_8E9W.cif",
+          "model_idx": 4
         }
       ]
     }
@@ -78,11 +105,31 @@
   ],
   "analysis_runs": [
     {
-      "id": "whole_protein",
-      "description": "Standard whole protein analysis",
+      "id": "whole_protein_hM1D_analysis",
+      "description": "Whole protein analysis for hM1D",
       "enabled": true,
       "source_predictions": ["standard", "with_msa"],
-      "analysis_type": "whole_protein"
+      "analysis_type": "motif",
+      "motif_id": "whole_protein_hM1D",
+      "metrics": ["rmsd", "plddt"]
+    },
+    {
+      "id": "whole_protein_hM3D_analysis",
+      "description": "Whole protein analysis for hM3D",
+      "enabled": true,
+      "source_predictions": ["standard", "with_msa"],
+      "analysis_type": "motif",
+      "motif_id": "whole_protein_hM3D",
+      "metrics": ["rmsd", "plddt"]
+    },
+    {
+      "id": "whole_protein_hM4D_analysis",
+      "description": "Whole protein analysis for hM4D",
+      "enabled": true,
+      "source_predictions": ["standard", "with_msa"],
+      "analysis_type": "motif",
+      "motif_id": "whole_protein_hM4D",
+      "metrics": ["rmsd", "plddt"]
     },
     {
       "id": "binding_pocket_hM1D_analysis",

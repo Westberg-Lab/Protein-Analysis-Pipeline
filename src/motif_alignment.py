@@ -68,9 +68,18 @@ def process_pse_file(pse_file, motif_def, molecule, output_dir, quiet=False, mot
         return None
     
     # Create a selection for the motif residues
-    residue_list = ','.join(str(r) for r in motif_def.get("residues", []))
     chain = motif_def.get("chain", "A")
-    motif_selection = f"chain {chain} and resi {residue_list}"
+    
+    # Check if this is a whole protein motif
+    if motif_def.get("whole_protein", False):
+        # Select the entire chain
+        motif_selection = f"chain {chain}"
+        if not quiet:
+            print(f"Using whole protein selection for chain {chain}")
+    else:
+        # Use the specified residue list
+        residue_list = ','.join(str(r) for r in motif_def.get("residues", []))
+        motif_selection = f"chain {chain} and resi {residue_list}"
     
     # Create a dictionary to store RMSD values
     rmsd_values = []
@@ -138,8 +147,7 @@ def process_pse_file(pse_file, motif_def, molecule, output_dir, quiet=False, mot
         cmd.show("cartoon", "all")
         cmd.set("cartoon_transparency", 0.7, "all")
         
-        # Get the list of residue numbers
-        residue_list = ','.join(str(r) for r in motif_def.get("residues", []))
+        # Get the chain
         chain = motif_def.get("chain", "A")
         
         # Process each object (template and predictions)
@@ -148,7 +156,15 @@ def process_pse_file(pse_file, motif_def, molecule, output_dir, quiet=False, mot
         for obj in all_objects:
             # Create a selection for this object's motif
             motif_sel_name = f"{obj}_motif"
-            cmd.select(motif_sel_name, f"{obj} and chain {chain} and resi {residue_list}")
+            
+            # Check if this is a whole protein motif
+            if motif_def.get("whole_protein", False):
+                # Select the entire chain
+                cmd.select(motif_sel_name, f"{obj} and chain {chain}")
+            else:
+                # Use the specified residue list
+                residue_list = ','.join(str(r) for r in motif_def.get("residues", []))
+                cmd.select(motif_sel_name, f"{obj} and chain {chain} and resi {residue_list}")
             
             # Show as sticks only (no spheres)
             cmd.show("sticks", motif_sel_name)
@@ -245,10 +261,11 @@ def main():
     else:
         motif_pse_dir = None
     
-    # Check if this motif has a specific template
-    motif_template = get_template_for_motif(motif_def, templates_dir)
-    if motif_template and motif_template.exists() and not args.quiet:
-        print(f"Found motif-specific template: {motif_template}")
+    # Check if this motif has a specific template and model_idx
+    template_path, model_idx = config_loader.get_motif_template_and_model_idx(full_config, args.motif, templates_dir)
+    if template_path and template_path.exists():
+        if not args.quiet:
+            print(f"Found motif-specific template: {template_path} (model_idx: {model_idx})")
     
     # Process each molecule
     all_rmsd_values = []
@@ -261,10 +278,10 @@ def main():
         
         if not pse_files:
             # If no PSE files found and we have a motif-specific template, we might need to create them
-            if motif_template and motif_template.exists():
+            if template_path and template_path.exists():
                 print(f"No PSE files found for molecule {molecule}, but motif has a specific template.")
                 print(f"You may need to run combine_cif_files.py first with the --template option.")
-                print(f"Example: python src/combine_cif_files.py --template {motif_template}")
+                print(f"Example: python src/combine_cif_files.py --template {template_path}")
             else:
                 print(f"Warning: No PSE files found for molecule {molecule}")
             continue
