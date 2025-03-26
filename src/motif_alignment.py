@@ -17,6 +17,16 @@ from pathlib import Path
 import json
 import config_loader
 
+def get_template_for_motif(motif_def, templates_dir):
+    """Get the template file for a motif if specified."""
+    if "template" in motif_def:
+        template_path = Path(motif_def["template"])
+        # If it's a relative path, prepend templates_dir
+        if not template_path.is_absolute():
+            template_path = templates_dir / template_path
+        return template_path
+    return None
+
 def find_pse_files_for_molecule(pse_dir, molecule_name):
     """Find PSE files that contain the specified molecule."""
     pse_files = []
@@ -212,10 +222,12 @@ def main():
         # Old configuration structure
         pse_dir = Path(config["directories"]["pse_files"])
         csv_dir = Path(config["directories"]["csv"])
+        templates_dir = Path(config["directories"].get("templates", "templates"))
     else:
         # New configuration structure
         pse_dir = Path(config.get("pse_files", "PSE_FILES"))
         csv_dir = Path(config.get("csv", "csv"))
+        templates_dir = Path(config.get("templates_dir", "templates"))
     
     if not pse_dir.exists():
         print(f"Error: PSE files directory {pse_dir} does not exist")
@@ -233,6 +245,11 @@ def main():
     else:
         motif_pse_dir = None
     
+    # Check if this motif has a specific template
+    motif_template = get_template_for_motif(motif_def, templates_dir)
+    if motif_template and motif_template.exists() and not args.quiet:
+        print(f"Found motif-specific template: {motif_template}")
+    
     # Process each molecule
     all_rmsd_values = []
     for molecule in molecules:
@@ -243,7 +260,13 @@ def main():
         pse_files = find_pse_files_for_molecule(pse_dir, molecule)
         
         if not pse_files:
-            print(f"Warning: No PSE files found for molecule {molecule}")
+            # If no PSE files found and we have a motif-specific template, we might need to create them
+            if motif_template and motif_template.exists():
+                print(f"No PSE files found for molecule {molecule}, but motif has a specific template.")
+                print(f"You may need to run combine_cif_files.py first with the --template option.")
+                print(f"Example: python src/combine_cif_files.py --template {motif_template}")
+            else:
+                print(f"Warning: No PSE files found for molecule {molecule}")
             continue
         
         if not args.quiet:

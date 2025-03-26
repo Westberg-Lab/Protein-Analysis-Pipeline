@@ -214,6 +214,32 @@ def get_motif_definition(config, motif_id):
             return motif
     return None
 
+def get_motif_template(config, motif_id, templates_dir=None):
+    """
+    Get the template file for a motif by ID.
+    
+    Returns None if the motif is not found or has no template.
+    
+    Args:
+        config: The configuration dictionary
+        motif_id: The ID of the motif
+        templates_dir: Optional directory to prepend to relative template paths
+    
+    Returns:
+        Path or None: Path to the template file if found, None otherwise
+    """
+    motif_def = get_motif_definition(config, motif_id)
+    if not motif_def or "template" not in motif_def:
+        return None
+    
+    template_path = Path(motif_def["template"])
+    
+    # If it's a relative path and templates_dir is provided, prepend templates_dir
+    if templates_dir and not template_path.is_absolute():
+        template_path = Path(templates_dir) / template_path
+    
+    return template_path
+
 def get_prediction_run_by_id(config, prediction_id):
     """
     Get a prediction run by ID.

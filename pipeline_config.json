@@ -23,12 +23,31 @@
     "motifs": {
       "definitions": [
         {
-          "id": "binding_pocket",
-          "description": "Ligand binding pocket residues",
-          "molecules": ["hM1Dshort_8E9X", "hM3Dshort_8E9W", "hM4Dshort_8E9X"],
+          "id": "binding_pocket_hM1D",
+          "description": "Ligand binding pocket residues for hM1Dshort_8E9X",
+          "molecules": ["hM1Dshort_8E9X"],
           "residues": [112, 113, 116, 117, 120, 164, 196, 199, 200, 203, 204, 413, 416, 417, 420, 439, 442, 443],
           "chain": "A",
-          "color": "magenta"
+          "color": "magenta",
+          "template": "templates/hM1D_template.cif"
+        },
+        {
+          "id": "binding_pocket_hM3D",
+          "description": "Ligand binding pocket residues for hM3Dshort_8E9W",
+          "molecules": ["hM3Dshort_8E9W"],
+          "residues": [125, 126, 129, 130, 133, 177, 209, 212, 213, 216, 217, 426, 429, 430, 433, 452, 455, 456],
+          "chain": "A",
+          "color": "magenta",
+          "template": "templates/hM3D_template.cif"
+        },
+        {
+          "id": "binding_pocket_hM4D",
+          "description": "Ligand binding pocket residues for hM4Dshort_8E9X",
+          "molecules": ["hM4Dshort_8E9X"],
+          "residues": [118, 119, 122, 123, 126, 170, 202, 205, 206, 209, 210, 419, 422, 423, 426, 445, 448, 449],
+          "chain": "A",
+          "color": "magenta",
+          "template": "templates/hM4D_template.cif"
         }
       ]
     }
@@ -66,12 +85,30 @@
       "analysis_type": "whole_protein"
     },
     {
-      "id": "binding_pocket_analysis",
-      "description": "Binding pocket motif analysis",
+      "id": "binding_pocket_hM1D_analysis",
+      "description": "Binding pocket motif analysis for hM1D",
       "enabled": true,
       "source_predictions": ["standard", "with_msa"],
       "analysis_type": "motif",
-      "motif_id": "binding_pocket",
+      "motif_id": "binding_pocket_hM1D",
+      "metrics": ["rmsd", "plddt"]
+    },
+    {
+      "id": "binding_pocket_hM3D_analysis",
+      "description": "Binding pocket motif analysis for hM3D",
+      "enabled": true,
+      "source_predictions": ["standard", "with_msa"],
+      "analysis_type": "motif",
+      "motif_id": "binding_pocket_hM3D",
+      "metrics": ["rmsd", "plddt"]
+    },
+    {
+      "id": "binding_pocket_hM4D_analysis",
+      "description": "Binding pocket motif analysis for hM4D",
+      "enabled": true,
+      "source_predictions": ["standard", "with_msa"],
+      "analysis_type": "motif",
+      "motif_id": "binding_pocket_hM4D",
       "metrics": ["rmsd", "plddt"]
     }
   ]

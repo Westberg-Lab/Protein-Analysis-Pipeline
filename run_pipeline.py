@@ -393,11 +393,21 @@ def run_motif_analysis(config, args, state_file=None, state=None, run_id=None, m
     # Define pipeline steps with standardized arguments
     pipeline_steps = []
     
+    # Get motif definition
+    motif_def = config_loader.get_motif_definition(full_config, motif_id)
+    if not motif_def:
+        log_message(f"Motif '{motif_id}' not found in configuration", level="ERROR", quiet=args.quiet)
+        return False
+    
     # Add motif alignment step
     motif_align_cmd = [
         "python", "src/motif_alignment.py",
         f"--motif={motif_id}"
     ]
+    
+    # Add template if specified in motif definition
+    if "template" in motif_def:
+        motif_align_cmd.append(f"--template={motif_def['template']}")
     
     # Add quiet option if specified
     if args.quiet:

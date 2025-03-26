@@ -428,6 +428,25 @@ def create_pse_files(unique_names, chai_dir, boltz_dir, template_file, model_idx
     # Return the RMSD values, reference name, and template directory
     return rmsd_values, reference_name, template_dir
 
+def get_molecule_specific_template(molecule_name, full_config, templates_dir):
+    """Get the specific template for a molecule based on motif definitions."""
+    # Check if we have motif definitions
+    if "global" not in full_config or "motifs" not in full_config["global"]:
+        return None
+    
+    motifs = full_config["global"]["motifs"].get("definitions", [])
+    
+    # Find a motif that includes this molecule
+    for motif in motifs:
+        if molecule_name in motif.get("molecules", []) and "template" in motif:
+            template_path = Path(motif["template"])
+            # If it's a relative path, prepend templates_dir
+            if not template_path.is_absolute():
+                template_path = templates_dir / template_path
+            return template_path
+    
+    return None
+
 def get_templates(config, args, full_config=None):
     """Get all template files from configuration or command line arguments."""
     # Get templates directory from config
@@ -555,12 +574,14 @@ def main():
         boltz_dir = Path(config["directories"]["boltz_output"])
         output_dir = Path(config["directories"]["pse_files"])
         csv_dir = Path(config["directories"]["csv"])
+        templates_dir = Path(config["directories"].get("templates", "templates"))
     else:
         # New configuration structure
         chai_dir = Path(config.get("chai_output", "OUTPUT/CHAI"))
         boltz_dir = Path(config.get("boltz_output", "OUTPUT/BOLTZ"))
         output_dir = Path(config.get("pse_files", "PSE_FILES"))
         csv_dir = Path(config.get("csv", "csv"))
+        templates_dir = Path(config.get("templates_dir", "templates"))
     
     # Get model index from config
     if "templates" in config:
@@ -581,23 +602,66 @@ def main():
         if not args.quiet:
             print(f"Created directory: {csv_dir}")
     
-    # Get all templates from configuration or command line arguments
-    templates = get_templates(config, args, full_config)
-    if not templates:
-        print("No templates found in configuration or command line arguments.")
+    # Get default templates from configuration or command line arguments
+    default_templates = get_templates(config, args, full_config)
+    if not default_templates:
+        print("No default templates found in configuration or command line arguments.")
         return
     
     if not args.quiet:
-        print(f"Found {len(templates)} templates: {', '.join(str(t) for t in templates)}")
+        print(f"Found {len(default_templates)} default templates: {', '.join(str(t) for t in default_templates)}")
     
-    # Process each template
+    # Process each unique name with its specific template if available
     templates_processed = 0
-    for template_file in templates:
-        if process_template(template_file, unique_names, chai_dir, boltz_dir, model_idx, output_dir, csv_dir, config, args.quiet):
-            templates_processed += 1
+    
+    for name in unique_names:
+        # Try to get a molecule-specific template
+        molecule_template = get_molecule_specific_template(name, full_config, templates_dir)
+        
+        if molecule_template and molecule_template.exists():
+            if not args.quiet:
+                print(f"Using molecule-specific template for {name}: {molecule_template}")
+            
+            # Create a subdirectory for this template if it doesn't exist
+            template_dir = output_dir / molecule_template.stem
+            template_dir.mkdir(exist_ok=True)
+            
+            # Process this molecule with its specific template
+            rmsd_values, reference_name, _ = create_pse_files(
+                [name], chai_dir, boltz_dir, molecule_template, model_idx, output_dir, config, args.quiet
+            )
+            
+            if rmsd_values:
+                # Write RMSD values to CSV
+                pse_csv_file = template_dir / 'rmsd_values.csv'
+                with open(pse_csv_file, 'w') as f:
+                    f.write('ligand,method,rmsd,reference\n')
+                    for entry in rmsd_values:
+                        f.write(f"{entry['ligand']},{entry['method']},{entry['rmsd']},{reference_name}\n")
+                
+                # Also write to the csv directory
+                csv_file = csv_dir / f'rmsd_values_{reference_name}_{name}.csv'
+                with open(csv_file, 'w') as f:
+                    f.write('ligand,method,rmsd,reference\n')
+                    for entry in rmsd_values:
+                        f.write(f"{entry['ligand']},{entry['method']},{entry['rmsd']},{reference_name}\n")
+                
+                templates_processed += 1
+                if not args.quiet:
+                    print(f"RMSD values saved to {pse_csv_file} and {csv_file}")
+            else:
+                print(f"No RMSD values generated for {name} with template {molecule_template}.")
+        else:
+            # If no molecule-specific template, use default templates
+            if not args.quiet:
+                print(f"No molecule-specific template found for {name}, using default templates")
+            
+            for template_file in default_templates:
+                if process_template(template_file, [name], chai_dir, boltz_dir, model_idx, output_dir, csv_dir, config, args.quiet):
+                    templates_processed += 1
     
     if templates_processed > 0:
-        print(f"Successfully processed {templates_processed} out of {len(templates)} templates.")
+        print(f"Successfully processed {templates_processed} templates.")
         print(f"All PSE files created successfully!")
     else:
         print("No templates were successfully processed.")
