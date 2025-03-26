@@ -389,26 +389,70 @@ def run_whole_protein_analysis(config, args, state_file=None, state=None, run_id
     log_message(f"Whole protein analysis completed successfully{run_desc}!", quiet=args.quiet)
     return True
 
-def run_motif_analysis(config, args, state_file=None, state=None, run_id=None, motif_id=None, metrics=None):
+def run_motif_analysis(config, args, state_file=None, state=None, run_id=None, motif_id=None, metrics=None, full_config=None):
     """Run motif-specific analysis steps."""
     # Define pipeline steps with standardized arguments
     pipeline_steps = []
     
-    # Get motif definition
-    motif_def = config_loader.get_motif_definition(config, motif_id)
+    # Get motif definition from full_config if provided, otherwise from config
+    if full_config:
+        motif_def = config_loader.get_motif_definition(full_config, motif_id)
+    else:
+        motif_def = config_loader.get_motif_definition(config, motif_id)
+        
     if not motif_def:
         log_message(f"Motif '{motif_id}' not found in configuration", level="ERROR", quiet=args.quiet)
         return False
     
-    # Add motif alignment step
-    motif_align_cmd = [
-        "python", "src/motif_alignment.py",
-        f"--motif={motif_id}"
+    # Create a directory for this analysis run
+    pse_base_dir = Path(config["directories"]["pse_files"])
+    # Create the base directory if it doesn't exist
+    pse_base_dir.mkdir(exist_ok=True, parents=True)
+    analysis_run_dir = pse_base_dir / run_id
+    analysis_run_dir.mkdir(exist_ok=True)
+    
+    # Add combine_cif_files step first to create base PSE files
+    combine_cif_cmd = [
+        "python", "src/combine_cif_files.py",
+        f"--chai-output={config['directories']['chai_output']}",
+        f"--boltz-output={config['directories']['boltz_output']}",
+        f"--pse-files={analysis_run_dir}",  # Use the analysis run directory
+        f"--model-idx={motif_def.get('model_idx', config.get('model_idx', 4))}"
     ]
     
     # Add template if specified in motif definition
     if "template" in motif_def:
-        motif_align_cmd.append(f"--template={motif_def['template']}")
+        combine_cif_cmd.append(f"--template={motif_def['template']}")
+    
+    # Add molecules if specified in motif definition
+    if "molecules" in motif_def and motif_def["molecules"]:
+        molecules_str = ",".join(motif_def["molecules"])
+        combine_cif_cmd.append(f"--molecules={molecules_str}")
+    
+    # Add method options
+    if not config.get("methods", {}).get("use_chai", True):
+        combine_cif_cmd.append("--no-chai")
+    if not config.get("methods", {}).get("use_boltz", True):
+        combine_cif_cmd.append("--no-boltz")
+    if not config.get("methods", {}).get("use_msa", True):
+        combine_cif_cmd.append("--no-msa")
+    
+    # Add quiet option if specified
+    if args.quiet:
+        combine_cif_cmd.append("--quiet")
+    
+    pipeline_steps.append({
+        "id": f"combine-cif-{motif_id}",
+        "command": combine_cif_cmd,
+        "description": f"Creating base PSE files for motif {motif_id}"
+    })
+    
+    # Add motif alignment step
+    motif_align_cmd = [
+        "python", "src/motif_alignment.py",
+        f"--motif={motif_id}",
+        f"--pse-files={analysis_run_dir}"  # Use the analysis run directory
+    ]
     
     # Add quiet option if specified
     if args.quiet:
@@ -424,7 +468,8 @@ def run_motif_analysis(config, args, state_file=None, state=None, run_id=None, m
     if not metrics or "rmsd" in metrics:
         motif_rmsd_cmd = [
             "python", "src/plot_motif_rmsd.py",
-            f"--motif={motif_id}"
+            f"--motif={motif_id}",
+            f"--pse-files={analysis_run_dir}"  # Use the analysis run directory
         ]
         
         # Add quiet option if specified
@@ -441,7 +486,8 @@ def run_motif_analysis(config, args, state_file=None, state=None, run_id=None, m
     if not metrics or "plddt" in metrics:
         motif_plddt_cmd = [
             "python", "src/extract_motif_plddt.py",
-            f"--motif={motif_id}"
+            f"--motif={motif_id}",
+            f"--pse-files={analysis_run_dir}"  # Use the analysis run directory
         ]
         
         # Add quiet option if specified
@@ -456,7 +502,8 @@ def run_motif_analysis(config, args, state_file=None, state=None, run_id=None, m
         
         motif_plddt_plot_cmd = [
             "python", "src/plot_motif_plddt.py",
-            f"--motif={motif_id}"
+            f"--motif={motif_id}",
+            f"--pse-files={analysis_run_dir}"  # Use the analysis run directory
         ]
         
         # Add quiet option if specified
@@ -506,7 +553,7 @@ def run_analysis_steps(config, full_config, args, state_file=None, state=None, r
             log_message(f"Motif '{motif_id}' not found in configuration", level="ERROR", quiet=args.quiet)
             return False
         
-        return run_motif_analysis(full_config, args, state_file, state, run_id, motif_id, metrics)
+        return run_motif_analysis(config, args, state_file, state, run_id, motif_id, metrics, full_config)
     else:
         log_message(f"Unknown analysis type: {analysis_type}", level="ERROR", quiet=args.quiet)
         return False

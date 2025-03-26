@@ -24,9 +24,11 @@ def parse_arguments():
                         help='Minimum value for colormap (default: from config)')
     parser.add_argument('--vmax', type=float, default=None,
                         help='Maximum value for colormap (default: from config)')
+    parser.add_argument('--pse-files', type=str,
+                        help='PSE files directory (default: from config)')
     
-    # Add common arguments, excluding the motif argument
-    parser = config_loader.add_common_args(parser, exclude=['motif'])
+    # Add common arguments, excluding the motif argument and pse-files
+    parser = config_loader.add_common_args(parser, exclude=['motif', 'pse-files'])
     
     return parser.parse_args()
 
@@ -131,10 +133,22 @@ def main():
         # Old configuration structure
         csv_dir = Path(config["directories"]["csv"])
         plots_dir = Path(config["directories"]["plots"])
+        
+        # Use pse_files from command line if provided
+        if args.pse_files:
+            pse_dir = Path(args.pse_files)
+        else:
+            pse_dir = Path(config["directories"]["pse_files"])
     else:
         # New configuration structure
         csv_dir = Path(config.get("csv", "csv"))
         plots_dir = Path(config.get("plots", "plots"))
+        
+        # Use pse_files from command line if provided
+        if args.pse_files:
+            pse_dir = Path(args.pse_files)
+        else:
+            pse_dir = Path(config.get("pse_files", "PSE_FILES"))
     
     if not csv_dir.exists():
         print(f"Error: CSV directory {csv_dir} does not exist")

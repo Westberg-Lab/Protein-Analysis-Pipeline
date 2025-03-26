@@ -9,7 +9,8 @@ in both CHAI and BOLTZ outputs. Each .pse file will include:
 Usage:
     python combine_cif_files.py [--model-idx N] [--template TEMPLATE_FILE]
                                [--chai-output CHAI_DIR] [--boltz-output BOLTZ_DIR]
-                               [--pse-files PSE_DIR] [--quiet]
+                               [--pse-files PSE_DIR] [--molecules MOLECULES]
+                               [--quiet]
 
 Options:
     --model-idx N        Model index to search for (default: from config)
@@ -17,6 +18,7 @@ Options:
     --chai-output DIR    CHAI output directory (default: from config)
     --boltz-output DIR   BOLTZ output directory (default: from config)
     --pse-files DIR      Output directory for .pse files (default: from config)
+    --molecules LIST     Comma-separated list of molecules to process (default: all)
     --quiet              Suppress detailed output
 """
 
@@ -34,6 +36,9 @@ def parse_arguments():
     
     # Add common arguments
     parser = config_loader.add_common_args(parser)
+    
+    # Add molecules parameter
+    parser.add_argument('--molecules', type=str, help='Comma-separated list of molecules to process')
     
     return parser.parse_args()
 
@@ -106,13 +111,6 @@ def find_cif_file(base_dir, name, with_msa, model_idx, quiet=False):
     Returns:
         Path or None: Path to the CIF file if found, None otherwise
     """
-    # Debug logging
-    if not quiet:
-        print(f"\n--- Finding CIF file for {name} ---")
-        print(f"    Base directory: {base_dir}")
-        print(f"    With MSA: {with_msa}")
-        print(f"    Model index: {model_idx}")
-    
     # Load molecules from molecules.json
     try:
         with open("molecules.json", 'r') as f:
@@ -120,7 +118,7 @@ def find_cif_file(base_dir, name, with_msa, model_idx, quiet=False):
             molecule_1 = [mol[1] for mol in data["molecule_1"] if mol]  # Extract mol1_name
     except Exception as e:
         if not quiet:
-            print(f"    Error loading molecules.json: {e}")
+            print(f"Error loading molecules.json: {e}")
         molecule_1 = []
     
     # Find the parent directory by checking which molecule_1 is a prefix of the name
@@ -130,9 +128,6 @@ def find_cif_file(base_dir, name, with_msa, model_idx, quiet=False):
             parent_dir = mol1_name
             break
     
-    if not quiet:
-        print(f"    Parent directory determined to be: {parent_dir}")
-    
     # Handle CHAI and BOLTZ differently
     if 'CHAI' in str(base_dir):
         # CHAI files
@@ -141,70 +136,40 @@ def find_cif_file(base_dir, name, with_msa, model_idx, quiet=False):
         else:
             search_dir = base_dir / parent_dir / name
         
-        if not quiet:
-            print(f"    Searching in: {search_dir}")
-        
         # Look for the CIF file with the correct model_idx
         cif_file = search_dir / f"pred.model_idx_{model_idx}.cif"
         
         # Check if file exists
         if cif_file.exists():
-            if not quiet:
-                print(f"    Found CIF file: {cif_file}")
             return cif_file
-        elif not quiet:
-            print(f"    CIF file not found: {cif_file}")
     else:
         if with_msa:
             search_dir = base_dir / f"{parent_dir}_with_MSA" / f"boltz_results_{name}"
         else:
             search_dir = base_dir / parent_dir / f"boltz_results_{name}"
         
-        if not quiet:
-            print(f"    Searching in: {search_dir}")
-        
         # For BOLTZ, check in predictions/[name]/[name]_model_0.cif
         predictions_dir = search_dir / "predictions"
-        
-        if not quiet:
-            print(f"    Looking in predictions directory: {predictions_dir}")
-            if not predictions_dir.exists():
-                print(f"    Predictions directory does not exist")
         
         # First try the expected path with name
         name_dir = predictions_dir / name
         if name_dir.exists() and name_dir.is_dir():
             cif_file = name_dir / f"{name}_model_0.cif"
-            if not quiet:
-                print(f"    Looking for BOLTZ file: {cif_file}")
-            
             if cif_file.exists():
-                if not quiet:
-                    print(f"    Found CIF file: {cif_file}")
                 return cif_file
-            elif not quiet:
-                print(f"    CIF file not found: {cif_file}")
         
         # If not found, check all subdirectories in predictions/
         if predictions_dir.exists() and predictions_dir.is_dir():
-            if not quiet:
-                print(f"    Checking all subdirectories in: {predictions_dir}")
             # Check each subdirectory for the CIF file
             for subdir in predictions_dir.iterdir():
                 if subdir.is_dir():
                     # Try with subdirectory name
                     cif_file = subdir / f"{subdir.name}_model_0.cif"
-                    if not quiet:
-                        print(f"    Looking for BOLTZ file: {cif_file}")
                     if cif_file.exists():
-                        if not quiet:
-                            print(f"    Found CIF file: {cif_file}")
                         return cif_file
-                    elif not quiet:
-                        print(f"    CIF file not found: {cif_file}")
     
     if not quiet:
-        print(f"    No CIF file found for {name}")
+        print(f"No CIF file found for {name}")
     return None
 
 def create_pse_files(unique_names, chai_dir, boltz_dir, template_file, model_idx, output_dir, config, quiet=False):
@@ -225,13 +190,10 @@ def create_pse_files(unique_names, chai_dir, boltz_dir, template_file, model_idx
     
     # Ensure output directory exists
     output_dir = Path(output_dir)
-    output_dir.mkdir(exist_ok=True)
+    output_dir.mkdir(exist_ok=True, parents=True)
     
-    # Create a subdirectory for this template
-    template_dir = output_dir / reference_name
-    template_dir.mkdir(exist_ok=True)
     if not quiet:
-        print(f"Created directory for template: {template_dir}")
+        print(f"Using output directory: {output_dir}")
     
     for name in unique_names:
         if not quiet:
@@ -418,15 +380,15 @@ def create_pse_files(unique_names, chai_dir, boltz_dir, template_file, model_idx
         
             # Save as PSE file if at least one structure was loaded
             if structures_loaded > 0:
-                pse_file = template_dir / f"{name}.pse"
+                pse_file = output_dir / f"{name}.pse"
                 cmd.save(str(pse_file))
                 if not quiet:
                     print(f"  Created {pse_file}")
             else:
                 print(f"  Skipping {name}.pse - No structures found")
 
-    # Return the RMSD values, reference name, and template directory
-    return rmsd_values, reference_name, template_dir
+    # Return the RMSD values and reference name
+    return rmsd_values, reference_name, output_dir
 
 def get_molecule_specific_template(molecule_name, full_config, templates_dir):
     """Get the specific template for a molecule based on motif definitions."""
@@ -520,9 +482,9 @@ def process_template(template_file, unique_names, chai_dir, boltz_dir, model_idx
         print(f"No RMSD values generated for template {template_file}.")
         return False
     
-    # Write RMSD values to CSV with reference protein name in both locations
-    # 1. In the template directory (for backward compatibility)
-    pse_csv_file = template_dir / 'rmsd_values.csv'
+    # Write RMSD values to CSV
+    # 1. In the output directory
+    pse_csv_file = output_dir / 'rmsd_values.csv'
     with open(pse_csv_file, 'w') as f:
         f.write('ligand,method,rmsd,reference\n')
         for entry in rmsd_values:
@@ -588,14 +550,22 @@ def main():
         # Old configuration structure
         chai_dir = Path(config["directories"]["chai_output"])
         boltz_dir = Path(config["directories"]["boltz_output"])
-        output_dir = Path(config["directories"]["pse_files"])
+        # Use pse_files from command line if provided
+        if args.pse_files:
+            output_dir = Path(args.pse_files)
+        else:
+            output_dir = Path(config["directories"]["pse_files"])
         csv_dir = Path(config["directories"]["csv"])
         templates_dir = Path(config["directories"].get("templates", "templates"))
     else:
         # New configuration structure
         chai_dir = Path(config.get("chai_output", "OUTPUT/CHAI"))
         boltz_dir = Path(config.get("boltz_output", "OUTPUT/BOLTZ"))
-        output_dir = Path(config.get("pse_files", "PSE_FILES"))
+        # Use pse_files from command line if provided
+        if args.pse_files:
+            output_dir = Path(args.pse_files)
+        else:
+            output_dir = Path(config.get("pse_files", "PSE_FILES"))
         csv_dir = Path(config.get("csv", "csv"))
         templates_dir = Path(config.get("templates_dir", "templates"))
     
@@ -604,11 +574,26 @@ def main():
                config.get("model_idx", 4))
     
     # Find unique names
-    unique_names = find_unique_names(chai_dir, boltz_dir, config, args.quiet)
+    all_unique_names = find_unique_names(chai_dir, boltz_dir, config, args.quiet)
     
-    if not unique_names:
+    if not all_unique_names:
         print("No unique names found. Please check if the directories exist and contain data.")
         return
+    
+    # Filter unique names based on --molecules parameter if provided
+    if args.molecules:
+        specified_molecules = [m.strip() for m in args.molecules.split(',')]
+        # Filter names that start with any of the specified molecules
+        unique_names = []
+        for name in all_unique_names:
+            for mol in specified_molecules:
+                if name == mol or name.startswith(mol + "_"):
+                    unique_names.append(name)
+                    break
+        if not args.quiet:
+            print(f"Filtering to {len(unique_names)} molecule combinations: {', '.join(unique_names)}")
+    else:
+        unique_names = all_unique_names
     
     # Create csv directory if it doesn't exist
     if not csv_dir.exists():
@@ -616,16 +601,17 @@ def main():
         if not args.quiet:
             print(f"Created directory: {csv_dir}")
     
-    # Get default templates from configuration or command line arguments
-    default_templates = get_templates(config, args, full_config)
-    if not default_templates:
-        print("No default templates found in configuration or command line arguments.")
-        return
+    # Get template from command line argument
+    template_file = None
+    if args.template:
+        template_path = Path(args.template)
+        # If it's a relative path and doesn't exist, try prepending templates_dir
+        if not template_path.is_absolute() and not template_path.exists():
+            template_path = templates_dir / template_path
+        if template_path.exists():
+            template_file = template_path
     
-    if not args.quiet:
-        print(f"Found {len(default_templates)} default templates: {', '.join(str(t) for t in default_templates)}")
-    
-    # Process each unique name with its specific template if available
+    # Process each unique name with its specific template
     templates_processed = 0
     
     for name in unique_names:
@@ -636,10 +622,6 @@ def main():
             if not args.quiet:
                 print(f"Using molecule-specific template for {name}: {molecule_template}")
             
-            # Create a subdirectory for this template if it doesn't exist
-            template_dir = output_dir / molecule_template.stem
-            template_dir.mkdir(exist_ok=True)
-            
             # Process this molecule with its specific template
             rmsd_values, reference_name, _ = create_pse_files(
                 [name], chai_dir, boltz_dir, molecule_template, model_idx, output_dir, config, args.quiet
@@ -647,13 +629,14 @@ def main():
             
             if rmsd_values:
                 # Write RMSD values to CSV
-                pse_csv_file = template_dir / 'rmsd_values.csv'
+                # 1. In the output directory
+                pse_csv_file = output_dir / 'rmsd_values.csv'
                 with open(pse_csv_file, 'w') as f:
                     f.write('ligand,method,rmsd,reference\n')
                     for entry in rmsd_values:
                         f.write(f"{entry['ligand']},{entry['method']},{entry['rmsd']},{reference_name}\n")
                 
-                # Also write to the csv directory
+                # 2. In the csv directory (for centralized storage)
                 csv_file = csv_dir / f'rmsd_values_{reference_name}_{name}.csv'
                 with open(csv_file, 'w') as f:
                     f.write('ligand,method,rmsd,reference\n')
@@ -665,14 +648,16 @@ def main():
                     print(f"RMSD values saved to {pse_csv_file} and {csv_file}")
             else:
                 print(f"No RMSD values generated for {name} with template {molecule_template}.")
-        else:
-            # If no molecule-specific template, use default templates
+        elif template_file:
+            # If no molecule-specific template but a template was provided via command line, use that
             if not args.quiet:
-                print(f"No molecule-specific template found for {name}, using default templates")
+                print(f"Using command line template for {name}: {template_file}")
             
-            for template_file in default_templates:
-                if process_template(template_file, [name], chai_dir, boltz_dir, model_idx, output_dir, csv_dir, config, args.quiet):
-                    templates_processed += 1
+            if process_template(template_file, [name], chai_dir, boltz_dir, model_idx, output_dir, csv_dir, config, args.quiet):
+                templates_processed += 1
+        else:
+            # No template available for this molecule
+            print(f"No template found for {name}. Skipping.")
     
     if templates_processed > 0:
         print(f"Successfully processed {templates_processed} templates.")

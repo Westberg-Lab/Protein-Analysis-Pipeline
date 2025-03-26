@@ -21,9 +21,11 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='Extract pLDDT values for specific motifs.')
     parser.add_argument('--motif', type=str, required=True,
                         help='Motif ID to extract pLDDT values for')
+    parser.add_argument('--pse-files', type=str,
+                        help='PSE files directory (default: from config)')
     
-    # Add common arguments, excluding the motif argument
-    parser = config_loader.add_common_args(parser, exclude=['motif'])
+    # Add common arguments, excluding the motif argument and pse-files
+    parser = config_loader.add_common_args(parser, exclude=['motif', 'pse-files'])
     
     return parser.parse_args()
 
@@ -221,11 +223,23 @@ def main():
         csv_dir = Path(config["directories"]["csv"])
         chai_dir = Path(config["directories"]["chai_output"])
         boltz_dir = Path(config["directories"]["boltz_output"])
+        
+        # Use pse_files from command line if provided
+        if args.pse_files:
+            pse_dir = Path(args.pse_files)
+        else:
+            pse_dir = Path(config["directories"]["pse_files"])
     else:
         # New configuration structure
         csv_dir = Path(config.get("csv", "csv"))
         chai_dir = Path(config.get("chai_output", "OUTPUT/CHAI"))
         boltz_dir = Path(config.get("boltz_output", "OUTPUT/BOLTZ"))
+        
+        # Use pse_files from command line if provided
+        if args.pse_files:
+            pse_dir = Path(args.pse_files)
+        else:
+            pse_dir = Path(config.get("pse_files", "PSE_FILES"))
     
     # Create output directory
     csv_dir.mkdir(exist_ok=True)

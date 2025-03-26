@@ -201,9 +201,11 @@ def parse_arguments():
                         help='Save motif-aligned PSE files (default: True)')
     parser.add_argument('--no-save-motif-pse', dest='save_motif_pse', action='store_false',
                         help='Do not save motif-aligned PSE files')
+    parser.add_argument('--pse-files', type=str,
+                        help='PSE files directory (default: from config)')
     
-    # Add common arguments, excluding the motif argument
-    parser = config_loader.add_common_args(parser, exclude=['motif'])
+    # Add common arguments, excluding the motif argument and pse-files
+    parser = config_loader.add_common_args(parser, exclude=['motif', 'pse-files'])
     
     return parser.parse_args()
 
@@ -236,12 +238,18 @@ def main():
     # Handle both old and new configuration structures
     if "directories" in config:
         # Old configuration structure
-        pse_dir = Path(config["directories"]["pse_files"])
+        if args.pse_files:
+            pse_dir = Path(args.pse_files)
+        else:
+            pse_dir = Path(config["directories"]["pse_files"])
         csv_dir = Path(config["directories"]["csv"])
         templates_dir = Path(config["directories"].get("templates", "templates"))
     else:
         # New configuration structure
-        pse_dir = Path(config.get("pse_files", "PSE_FILES"))
+        if args.pse_files:
+            pse_dir = Path(args.pse_files)
+        else:
+            pse_dir = Path(config.get("pse_files", "PSE_FILES"))
         csv_dir = Path(config.get("csv", "csv"))
         templates_dir = Path(config.get("templates_dir", "templates"))
     
