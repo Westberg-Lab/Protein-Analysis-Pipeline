@@ -14,6 +14,10 @@ This document provides detailed documentation for each Python script in the prot
 8. [combine_cif_files.py](#combine_cif_filespy)
 9. [plot_rmsd_heatmap.py](#plot_rmsd_heatmappy)
 10. [plot_plddt_heatmap.py](#plot_plddt_heatmappy)
+11. [motif_alignment.py](#motif_alignmentpy)
+12. [extract_motif_plddt.py](#extract_motif_plddtpy)
+13. [plot_motif_rmsd.py](#plot_motif_rmsdpy)
+14. [plot_motif_plddt.py](#plot_motif_plddtpy)
 
 ---
 
@@ -24,20 +28,23 @@ The master script that orchestrates the entire protein prediction pipeline from 
 
 ### Functionality
 - Archives previous outputs
-- Runs each script in the pipeline in the correct order
+- Runs prediction steps (CHAI and BOLTZ)
+- Runs analysis steps (whole protein and motif-specific)
 - Handles errors and provides status updates
 - Supports resuming from failures
-- Supports running multiple configurations in a single pipeline run
+- Supports running multiple prediction and analysis runs in a single pipeline execution
 
 ### Command-line Arguments
 ```
-python run_pipeline.py [--config CONFIG_FILE] [--no-archive] [--skip-step STEP]
+python run_pipeline.py [--config CONFIG_FILE] [--no-archive] [--delete-outputs] [--skip-step STEP]
                       [--use-chai] [--no-chai] [--use-boltz] [--no-boltz]
                       [--use-msa] [--no-msa] [--use-msa-dir]
                       [--template TEMPLATE_FILE] [--model-idx N]
+                      [--prediction-runs PRED_IDS] [--analysis-runs ANALYSIS_IDS]
+                      [--enable-prediction PRED_ID] [--disable-prediction PRED_ID]
+                      [--enable-analysis ANALYSIS_ID] [--disable-analysis ANALYSIS_ID]
                       [--quiet] [--resume] [--force-resume] [--state-file STATE_FILE]
-                      [--clean-state] [--configs CONFIG_IDS]
-                      [--enable-config CONFIG_ID] [--disable-config CONFIG_ID]
+                      [--clean-state]
 ```
 
 ### Key Functions
@@ -48,7 +55,10 @@ python run_pipeline.py [--config CONFIG_FILE] [--no-archive] [--skip-step STEP]
 - `update_state()`: Updates the pipeline state after a step
 - `log_message()`: Logs a message with timestamp
 - `run_step()`: Runs a pipeline step with error handling and state tracking
-- `run_pipeline_steps()`: Runs pipeline steps for a specific configuration
+- `run_prediction_steps()`: Runs prediction steps for a specific prediction run
+- `run_whole_protein_analysis()`: Runs whole protein analysis steps
+- `run_motif_analysis()`: Runs motif-specific analysis steps
+- `run_analysis_steps()`: Runs analysis steps based on the analysis type
 - `main()`: Main function that orchestrates the pipeline
 
 ### Dependencies
@@ -57,20 +67,20 @@ python run_pipeline.py [--config CONFIG_FILE] [--no-archive] [--skip-step STEP]
 
 ### Example Usage
 ```bash
-# Run the entire pipeline with default settings (both standard and with_msa configurations)
+# Run the entire pipeline with default settings
 python run_pipeline.py
 
 # Run with a specific configuration file
 python run_pipeline.py --config custom_config.json
 
-# Run only the standard configuration (without MSA)
-python run_pipeline.py --configs standard
+# Run only specific prediction runs
+python run_pipeline.py --prediction-runs standard,with_msa
 
-# Run only the with_msa configuration
-python run_pipeline.py --configs with_msa
+# Run only specific analysis runs
+python run_pipeline.py --analysis-runs whole_protein_hM1D_analysis,binding_pocket_hM1D_analysis
 
-# Enable a specific configuration
-python run_pipeline.py --enable-config standard --disable-config with_msa
+# Enable specific prediction and analysis runs
+python run_pipeline.py --enable-prediction standard --disable-prediction with_msa --enable-analysis whole_protein_hM1D_analysis
 
 # Skip the archiving step
 python run_pipeline.py --no-archive
@@ -94,24 +104,31 @@ Loads and manages configuration for the protein prediction pipeline.
 
 ### Functionality
 - Loads configuration from a JSON file
-- Supports multiple configurations in a single file
+- Supports multiple prediction and analysis runs in a single file
 - Provides default values if the file is not found
 - Updates configuration with command-line arguments
 - Adds common arguments to an ArgumentParser
+- Retrieves motif definitions and templates
 
 ### Key Functions
 - `load_config(config_file='pipeline_config.json')`: Loads configuration from a JSON file
 - `deep_merge(base, override)`: Deep merges two dictionaries
-- `get_merged_config(config, config_id=None)`: Gets a merged configuration by combining global settings with a specific configuration
-- `get_enabled_configurations(config, config_ids=None)`: Gets a list of enabled configurations
+- `get_merged_config(config, prediction_id=None)`: Gets a merged configuration by combining global settings with a specific prediction run
+- `get_enabled_prediction_runs(config, prediction_ids=None)`: Gets a list of enabled prediction runs
+- `get_enabled_analysis_runs(config, analysis_ids=None)`: Gets a list of enabled analysis runs
+- `get_motif_definition(config, motif_id)`: Gets a motif definition by ID
+- `get_motif_template(config, motif_id, templates_dir=None)`: Gets the template file for a motif by ID
+- `get_motif_template_and_model_idx(config, motif_id, templates_dir=None)`: Gets the template file and model_idx for a motif by ID
+- `get_prediction_run_by_id(config, prediction_id)`: Gets a prediction run by ID
 - `update_config_from_args(config, args)`: Updates configuration with command-line arguments
-- `add_common_args(parser)`: Adds common arguments to an ArgumentParser
+- `add_common_args(parser, exclude=None)`: Adds common arguments to an ArgumentParser
 
 ### Configuration Structure
-The configuration file now has two main sections:
+The configuration file has three main sections:
 
-1. **Global Settings**: Common settings shared across all configurations
-2. **Configurations**: Multiple specific configurations, each with its own settings
+1. **Global Settings**: Common settings shared across all runs
+2. **Prediction Runs**: Multiple specific prediction configurations
+3. **Analysis Runs**: Multiple specific analysis configurations
 
 ```json
 {
@@ -123,18 +140,40 @@ The configuration file now has two main sections:
       "boltz_output": "OUTPUT/BOLTZ",
       "pse_files": "PSE_FILES",
       "plots": "plots",
-      "csv": "csv"
+      "csv": "csv",
+      "templates": "templates"
     },
-    "templates": {
-      "files": ["hM3Dq_DCZ.cif"],
-      "model_idx": 4
-    },
+    "model_idx": 4,
     "visualization": {
       "rmsd_vmin": 0.2,
       "rmsd_vmax": 6.2
+    },
+    "motifs": {
+      "definitions": [
+        {
+          "id": "binding_pocket_hM1D",
+          "description": "Ligand binding pocket residues for hM1Dshort_8E9X",
+          "molecules": ["hM1Dshort_8E9X"],
+          "residues": [112, 113, 116, 117, 120, 164, 196, 199, 200, 203, 204, 413, 416, 417, 420, 439, 442, 443],
+          "chain": "A",
+          "color": "magenta",
+          "template": "templates/hM1D_template_8E9X.cif",
+          "model_idx": 4
+        },
+        {
+          "id": "whole_protein_hM1D",
+          "description": "Complete protein structure for hM1Dshort_8E9X",
+          "molecules": ["hM1Dshort_8E9X"],
+          "whole_protein": true,
+          "chain": "A",
+          "color": "cyan",
+          "template": "templates/hM1D_template_8E9X.cif",
+          "model_idx": 4
+        }
+      ]
     }
   },
-  "configurations": [
+  "prediction_runs": [
     {
       "id": "standard",
       "description": "Standard run without MSA",
@@ -157,6 +196,26 @@ The configuration file now has two main sections:
         "use_msa_dir": false
       }
     }
+  ],
+  "analysis_runs": [
+    {
+      "id": "whole_protein_hM1D_analysis",
+      "description": "Whole protein analysis for hM1D",
+      "enabled": true,
+      "source_predictions": ["standard", "with_msa"],
+      "analysis_type": "motif",
+      "motif_id": "whole_protein_hM1D",
+      "metrics": ["rmsd", "plddt"]
+    },
+    {
+      "id": "binding_pocket_hM1D_analysis",
+      "description": "Binding pocket motif analysis for hM1D",
+      "enabled": true,
+      "source_predictions": ["standard", "with_msa"],
+      "analysis_type": "motif",
+      "motif_id": "binding_pocket_hM1D",
+      "metrics": ["rmsd", "plddt"]
+    }
   ]
 }
 ```
@@ -166,19 +225,20 @@ The configuration file now has two main sections:
 # Load configuration
 full_config = config_loader.load_config()
 
-# Get enabled configurations
-enabled_configs = config_loader.get_enabled_configurations(full_config, args.configs)
+# Get enabled prediction runs
+enabled_prediction_runs = config_loader.get_enabled_prediction_runs(full_config, args.prediction_runs)
 
-# For each configuration
-for cfg in enabled_configs:
-    # Merge global config with this configuration
-    merged_config = config_loader.deep_merge(full_config.get("global", {}), cfg)
-    
-    # Update with command-line arguments
-    merged_config = config_loader.update_config_from_args(merged_config, args)
-    
-    # Use the merged configuration
-    print(merged_config)
+# Get enabled analysis runs
+enabled_analysis_runs = config_loader.get_enabled_analysis_runs(full_config, args.analysis_runs)
+
+# Get a motif definition
+motif_def = config_loader.get_motif_definition(full_config, "binding_pocket_hM1D")
+
+# Get a motif template
+template_path = config_loader.get_motif_template(full_config, "binding_pocket_hM1D")
+
+# Get a motif template and model_idx
+template_path, model_idx = config_loader.get_motif_template_and_model_idx(full_config, "binding_pocket_hM1D")
 ```
 
 ---
@@ -429,6 +489,7 @@ Creates PyMOL session (.pse) files for each unique directory name that exists in
 - Calculates RMSD values
 - Creates PyMOL session files (.pse)
 - Saves RMSD values to CSV files
+- Supports molecule-specific templates
 
 ### Command-line Arguments
 ```
@@ -443,7 +504,8 @@ python combine_cif_files.py [--model-idx N] [--template TEMPLATE_FILE]
 - `sanitize_name(name)`: Sanitizes a name for use in PyMOL by replacing problematic characters
 - `find_cif_file(base_dir, name, with_msa, model_idx, quiet=False)`: Finds the CIF file in the specified directory
 - `create_pse_files(unique_names, chai_dir, boltz_dir, template_file, model_idx, output_dir, config, quiet=False)`: Creates .pse files for each unique name
-- `get_templates(config, args)`: Gets all template files from configuration or command-line arguments
+- `get_molecule_specific_template(molecule_name, full_config, templates_dir)`: Gets the specific template for a molecule based on motif definitions
+- `get_templates(config, args, full_config=None)`: Gets all template files from configuration or command-line arguments
 - `process_template(template_file, unique_names, chai_dir, boltz_dir, model_idx, output_dir, csv_dir, config, quiet=False)`: Processes a single template file
 - `main()`: Main function that orchestrates the process
 
@@ -556,3 +618,108 @@ python plot_plddt_heatmap.py --output custom_heatmap.png
 
 # Generate a heatmap with custom CHAI and BOLTZ output directories
 python plot_plddt_heatmap.py --chai-output custom_chai --boltz-output custom_boltz
+```
+
+---
+
+## motif_alignment.py
+
+### Purpose
+Performs motif-specific alignment and RMSD calculation.
+
+### Functionality
+- Takes protein structures and motif definitions from the configuration
+- Extracts the specified motif regions (e.g., binding pockets, active sites)
+- Performs alignment on just those regions
+- Calculates motif-specific RMSD values
+- Creates specialized PyMOL session files that highlight the motif regions
+- Supports both specific residue motifs and whole protein motifs
+
+### Command-line Arguments
+```
+python motif_alignment.py [--motif MOTIF_ID] [--template TEMPLATE_FILE]
+                         [--model-idx N] [--quiet]
+```
+
+### Key Functions
+- `parse_arguments()`: Parses command-line arguments
+- `get_motif_definition(config, motif_id)`: Gets a motif definition by ID
+- `find_cif_files(motif_def, config, quiet=False)`: Finds all CIF files for the molecules in the motif definition
+- `perform_motif_alignment(motif_def, cif_files, template_file, model_idx, output_dir, quiet=False)`: Performs motif-specific alignment and RMSD calculation
+- `main()`: Main function that orchestrates the process
+
+### Output Files
+- PyMOL session files (.pse) for each motif
+- CSV files with motif-specific RMSD values
+
+### Example Usage
+```bash
+# Perform motif-specific alignment with default settings
+python motif_alignment.py --motif binding_pocket_hM1D
+
+# Perform motif-specific alignment with a specific template
+python motif_alignment.py --motif binding_pocket_hM1D --template custom_template.cif
+
+# Perform motif-specific alignment with a specific model index
+python motif_alignment.py --motif binding_pocket_hM1D --model-idx 0
+```
+
+---
+
+## extract_motif_plddt.py
+
+### Purpose
+Extracts pLDDT values for specific motifs.
+
+### Functionality
+- Finds all JSON files with pLDDT values
+- Extracts pLDDT values for the specified motif residues
+- Calculates average pLDDT values for the motif regions
+- Supports both specific residue motifs and whole protein motifs
+
+### Command-line Arguments
+```
+python extract_motif_plddt.py [--motif MOTIF_ID] [--quiet]
+```
+
+### Key Functions
+- `parse_arguments()`: Parses command-line arguments
+- `get_motif_definition(config, motif_id)`: Gets a motif definition by ID
+- `find_json_files(motif_def, config, quiet=False)`: Finds all JSON files with pLDDT values for the molecules in the motif definition
+- `extract_motif_plddt(motif_def, json_files, output_dir, quiet=False)`: Extracts pLDDT values for the specified motif residues
+- `main()`: Main function that orchestrates the process
+
+### Output Files
+- CSV files with motif-specific pLDDT values
+
+### Example Usage
+```bash
+# Extract motif-specific pLDDT values with default settings
+python extract_motif_plddt.py --motif binding_pocket_hM1D
+```
+
+---
+
+## plot_motif_rmsd.py
+
+### Purpose
+Generates heatmap visualizations of motif-specific RMSD values.
+
+### Functionality
+- Reads motif-specific RMSD values from CSV files
+- Creates a heatmap with methods on the x-axis, ligand names on the y-axis, and RMSD values as cell values
+- Saves the heatmap as a PNG file
+- Saves the data to a CSV file for further analysis
+
+### Command-line Arguments
+```
+python plot_motif_rmsd.py [--motif MOTIF_ID] [--quiet]
+```
+
+### Key Functions
+- `parse_arguments()`: Parses command-line arguments
+- `get_motif_definition(config, motif_id)`: Gets a motif definition by ID
+- `find_rmsd_csv_files(motif_id, quiet=False)`: Finds all rmsd_values.csv files for the specified motif
+- `read_rmsd_values(csv_file, quiet=False)`: Reads RMSD values from a CSV file
+- `create_heatmap(df, output_file, config, quiet=False)`: Creates a heatmap visualization of RMSD values
+- `main()`: Main function that orchestrates the process

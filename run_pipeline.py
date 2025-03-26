@@ -282,12 +282,13 @@ def run_whole_protein_analysis(config, args, state_file=None, state=None, run_id
     pipeline_steps = []
     
     # Add analysis steps with appropriate arguments
+    model_idx = config.get("templates", {}).get("model_idx", 4)  # Default to 4 if not found
     combine_cif_cmd = [
         "python", "src/combine_cif_files.py",
         f"--chai-output={config['directories']['chai_output']}",
         f"--boltz-output={config['directories']['boltz_output']}",
         f"--pse-files={config['directories']['pse_files']}",
-        f"--model-idx={config['templates']['model_idx']}"
+        f"--model-idx={model_idx}"
     ]
     
     # Add template if specified in command line
@@ -394,7 +395,7 @@ def run_motif_analysis(config, args, state_file=None, state=None, run_id=None, m
     pipeline_steps = []
     
     # Get motif definition
-    motif_def = config_loader.get_motif_definition(full_config, motif_id)
+    motif_def = config_loader.get_motif_definition(config, motif_id)
     if not motif_def:
         log_message(f"Motif '{motif_id}' not found in configuration", level="ERROR", quiet=args.quiet)
         return False
@@ -505,7 +506,7 @@ def run_analysis_steps(config, full_config, args, state_file=None, state=None, r
             log_message(f"Motif '{motif_id}' not found in configuration", level="ERROR", quiet=args.quiet)
             return False
         
-        return run_motif_analysis(config, args, state_file, state, run_id, motif_id, metrics)
+        return run_motif_analysis(full_config, args, state_file, state, run_id, motif_id, metrics)
     else:
         log_message(f"Unknown analysis type: {analysis_type}", level="ERROR", quiet=args.quiet)
         return False

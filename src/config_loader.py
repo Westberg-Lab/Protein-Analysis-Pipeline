@@ -71,10 +71,7 @@ def load_config(config_file='pipeline_config.json'):
                     "plots": "plots",
                     "csv": "csv"
                 },
-                "templates": {
-                    "default_template": "KOr_w_momSalB.cif",
-                    "model_idx": 4
-                },
+                "model_idx": 4,
                 "visualization": {
                     "rmsd_vmin": 0.2,
                     "rmsd_vmax": 6.2
@@ -303,7 +300,7 @@ def update_config_from_args(config, args):
             if arg_key in args_dict:
                 config["methods"][key] = args_dict[arg_key]
     
-    # Update templates
+    # Update templates if they exist
     if "templates" in config:
         if "model_idx" in args_dict and args_dict["model_idx"] is not None:
             config["templates"]["model_idx"] = args_dict["model_idx"]
@@ -312,6 +309,9 @@ def update_config_from_args(config, args):
                 config["templates"]["default_template"] = args_dict["template"]
             elif "files" in config["templates"]:
                 config["templates"]["files"] = [args_dict["template"]]
+    # If templates section doesn't exist but model_idx is provided, add it at the top level
+    elif "model_idx" in args_dict and args_dict["model_idx"] is not None:
+        config["model_idx"] = args_dict["model_idx"]
     
     return config
 

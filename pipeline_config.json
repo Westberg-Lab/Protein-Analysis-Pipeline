@@ -38,7 +38,7 @@
         },
         {
           "id": "whole_protein_hM4D",
-          "description": "Complete protein structure for hM4Dshort_",
+          "description": "Complete protein structure for hM4Dshort_8E9X",
           "molecules": ["hM4Dshort_8E9X"],
           "whole_protein": true,
           "chain": "A",
@@ -63,17 +63,17 @@
           "residues": [125, 126, 129, 130, 133, 177, 209, 212, 213, 216, 217, 426, 429, 430, 433, 452, 455, 456],
           "chain": "A",
           "color": "magenta",
-          "template": "templates/hM3D_template.cif",
+          "template": "templates/hM3D_template_8E9W.cif",
           "model_idx": 4
         },
         {
           "id": "binding_pocket_hM4D",
-          "description": "Ligand binding pocket residues for hM4Dshort_",
+          "description": "Ligand binding pocket residues for hM4Dshort_8E9X",
           "molecules": ["hM4Dshort_8E9X"],
           "residues": [118, 119, 122, 123, 126, 170, 202, 205, 206, 209, 210, 419, 422, 423, 426, 445, 448, 449],
           "chain": "A",
           "color": "magenta",
-          "template": "templates/hM3D_template_8E9W.cif",
+          "template": "templates/hMD_template_8E9X.cif",
           "model_idx": 4
         }
       ]

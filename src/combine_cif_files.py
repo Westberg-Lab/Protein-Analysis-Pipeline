@@ -478,12 +478,28 @@ def get_templates(config, args, full_config=None):
             return [templates_dir / config["default_template"]]
     
     # If no templates found and full_config is provided, try to get them from the global config
-    if full_config and "global" in full_config and "templates" in full_config["global"]:
-        if "files" in full_config["global"]["templates"]:
-            return [templates_dir / template for template in full_config["global"]["templates"]["files"]]
-        elif "default_template" in full_config["global"]["templates"]:
-            return [templates_dir / full_config["global"]["templates"]["default_template"]]
+    if full_config and "global" in full_config:
+        if "templates" in full_config["global"]:
+            if "files" in full_config["global"]["templates"]:
+                return [templates_dir / template for template in full_config["global"]["templates"]["files"]]
+            elif "default_template" in full_config["global"]["templates"]:
+                return [templates_dir / full_config["global"]["templates"]["default_template"]]
+        
+        # Try to get molecule-specific templates from motif definitions
+        if "motifs" in full_config["global"] and "definitions" in full_config["global"]["motifs"]:
+            motif_templates = []
+            for motif in full_config["global"]["motifs"]["definitions"]:
+                if "template" in motif:
+                    template_path = Path(motif["template"])
+                    # If it's a relative path, prepend templates_dir
+                    if not template_path.is_absolute():
+                        template_path = templates_dir / template_path
+                    if template_path not in motif_templates:
+                        motif_templates.append(template_path)
+            if motif_templates:
+                return motif_templates
     
+    # If no templates found anywhere, return an empty list
     return []
 
 def process_template(template_file, unique_names, chai_dir, boltz_dir, model_idx, output_dir, csv_dir, config, quiet=False):
@@ -583,11 +599,9 @@ def main():
         csv_dir = Path(config.get("csv", "csv"))
         templates_dir = Path(config.get("templates_dir", "templates"))
     
-    # Get model index from config
-    if "templates" in config:
-        model_idx = config["templates"]["model_idx"]
-    else:
-        model_idx = config.get("model_idx", 4)
+    # Get model index from config with fallback
+    model_idx = config.get("templates", {}).get("model_idx", 
+               config.get("model_idx", 4))
     
     # Find unique names
     unique_names = find_unique_names(chai_dir, boltz_dir, config, args.quiet)
