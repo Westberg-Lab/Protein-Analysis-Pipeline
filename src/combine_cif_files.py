@@ -482,23 +482,10 @@ def process_template(template_file, unique_names, chai_dir, boltz_dir, model_idx
         print(f"No RMSD values generated for template {template_file}.")
         return False
     
-    # Write RMSD values to CSV
-    # 1. In the output directory
-    pse_csv_file = output_dir / 'rmsd_values.csv'
-    with open(pse_csv_file, 'w') as f:
-        f.write('ligand,method,rmsd,reference\n')
-        for entry in rmsd_values:
-            f.write(f"{entry['ligand']},{entry['method']},{entry['rmsd']},{reference_name}\n")
-    
-    # 2. In the csv directory (for centralized storage)
-    csv_file = csv_dir / f'rmsd_values_{reference_name}.csv'
-    with open(csv_file, 'w') as f:
-        f.write('ligand,method,rmsd,reference\n')
-        for entry in rmsd_values:
-            f.write(f"{entry['ligand']},{entry['method']},{entry['rmsd']},{reference_name}\n")
+    # No need to write RMSD values to CSV anymore
     
     if not quiet:
-        print(f"RMSD values saved to {pse_csv_file} and {csv_file}")
+        print(f"PSE files created successfully")
     
     return True
 
@@ -595,11 +582,7 @@ def main():
     else:
         unique_names = all_unique_names
     
-    # Create csv directory if it doesn't exist
-    if not csv_dir.exists():
-        csv_dir.mkdir()
-        if not args.quiet:
-            print(f"Created directory: {csv_dir}")
+    # No need to create csv directory anymore
     
     # Get template from command line argument
     template_file = None
@@ -628,24 +611,11 @@ def main():
             )
             
             if rmsd_values:
-                # Write RMSD values to CSV
-                # 1. In the output directory
-                pse_csv_file = output_dir / 'rmsd_values.csv'
-                with open(pse_csv_file, 'w') as f:
-                    f.write('ligand,method,rmsd,reference\n')
-                    for entry in rmsd_values:
-                        f.write(f"{entry['ligand']},{entry['method']},{entry['rmsd']},{reference_name}\n")
-                
-                # 2. In the csv directory (for centralized storage)
-                csv_file = csv_dir / f'rmsd_values_{reference_name}_{name}.csv'
-                with open(csv_file, 'w') as f:
-                    f.write('ligand,method,rmsd,reference\n')
-                    for entry in rmsd_values:
-                        f.write(f"{entry['ligand']},{entry['method']},{entry['rmsd']},{reference_name}\n")
+                # No need to write RMSD values to CSV anymore
                 
                 templates_processed += 1
                 if not args.quiet:
-                    print(f"RMSD values saved to {pse_csv_file} and {csv_file}")
+                    print(f"PSE files created successfully")
             else:
                 print(f"No RMSD values generated for {name} with template {molecule_template}.")
         elif template_file:

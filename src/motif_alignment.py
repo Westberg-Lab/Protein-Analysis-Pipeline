@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Script to perform motif-specific alignment and RMSD calculation.
+Script to calculate motif-specific RMSD values using whole-protein alignment.
 
 This script:
 1. Takes protein structures and motif definitions
-2. Extracts the specified motif regions
-3. Performs alignment on just those regions
-4. Calculates motif-specific RMSD values
+2. Aligns the whole proteins
+3. Extracts the specified motif regions
+4. Calculates RMSD values for the motif regions using the whole-protein alignment
 """
 
 import argparse
@@ -31,7 +31,13 @@ def find_pse_files_for_molecule(pse_dir, molecule_name):
     """Find PSE files that contain the specified molecule."""
     pse_files = []
     
-    # Look in all template directories
+    # Look directly in the pse_dir first
+    for pse_file in pse_dir.glob('*.pse'):
+        # If the molecule name is in the PSE filename, include it
+        if molecule_name in pse_file.stem:
+            pse_files.append(pse_file)
+    
+    # Also look in all template directories
     for template_dir in pse_dir.iterdir():
         if template_dir.is_dir():
             # Check each PSE file
@@ -43,7 +49,7 @@ def find_pse_files_for_molecule(pse_dir, molecule_name):
     return pse_files
 
 def process_pse_file(pse_file, motif_def, molecule, output_dir, quiet=False, motif_pse_dir=None):
-    """Process a PyMOL session file for motif-specific alignment."""
+    """Process a PyMOL session file to calculate motif-specific RMSD using whole-protein alignment."""
     # Reset PyMOL
     cmd.reinitialize()
     
@@ -105,20 +111,38 @@ def process_pse_file(pse_file, motif_def, molecule, output_dir, quiet=False, mot
         else:
             continue
         
-        # Perform motif-specific alignment
+        # Two-Step Approach: Align whole proteins, then calculate RMSD for motif regions
         try:
+            # Step 1: Align the whole proteins
+            # Create selections for the whole proteins (using chain A or the specified chain)
+            whole_chain = f"chain {chain}"
+            cmd.select("template_whole", f"{template_obj} and {whole_chain}")
+            cmd.select("pred_whole", f"{obj} and {whole_chain}")
+            
+            # Check if whole protein selections are valid
+            if cmd.count_atoms("template_whole") == 0 or cmd.count_atoms("pred_whole") == 0:
+                print(f"Warning: Empty whole protein selection for {obj}")
+                continue
+            
+            # Align the whole proteins
+            alignment_result = cmd.align("pred_whole", "template_whole")
+            whole_protein_rmsd = alignment_result[0]  # First element is RMSD
+            
+            if not quiet:
+                print(f"  Aligned whole protein {obj} to {template_obj}, RMSD: {whole_protein_rmsd:.4f}")
+            
+            # Step 2: Calculate RMSD for just the motif regions
             # Create temporary selections for the motif regions
             cmd.select("template_motif", f"{template_obj} and {motif_selection}")
             cmd.select("pred_motif", f"{obj} and {motif_selection}")
             
-            # Check if selections are valid
+            # Check if motif selections are valid
             if cmd.count_atoms("template_motif") == 0 or cmd.count_atoms("pred_motif") == 0:
                 print(f"Warning: Empty motif selection for {obj}")
                 continue
             
-            # Align the motif regions
-            alignment_result = cmd.align("pred_motif", "template_motif")
-            rmsd = alignment_result[0]  # First element is RMSD
+            # Calculate RMSD for motif regions after whole-protein alignment
+            rmsd = cmd.rms_cur("pred_motif", "template_motif")
             
             # Store the RMSD value
             rmsd_values.append({
@@ -131,10 +155,10 @@ def process_pse_file(pse_file, motif_def, molecule, output_dir, quiet=False, mot
             })
             
             if not quiet:
-                print(f"  Aligned {obj} to {template_obj} using motif {motif_def.get('id')}, RMSD: {rmsd:.4f}")
+                print(f"  Calculated RMSD for {obj} against {template_obj} using motif {motif_def.get('id')}, RMSD: {rmsd:.4f}")
         
         except pymol.CmdException as e:
-            print(f"  Error aligning {obj}: {e}")
+            print(f"  Error calculating RMSD for {obj}: {e}")
     
     # Save motif-aligned PSE file if requested
     if motif_pse_dir is not None:
@@ -174,12 +198,12 @@ def process_pse_file(pse_file, motif_def, molecule, output_dir, quiet=False, mot
             if not quiet:
                 print(f"  Showing motif for {obj} as sticks with original color")
         
-        # Save the aligned session
-        motif_pse_file = motif_pse_dir / f"{pse_file.stem}_motif_{motif_def.get('id')}.pse"
+        # Save the aligned session - use a simpler filename without the motif ID
+        motif_pse_file = motif_pse_dir / f"{pse_file.stem}_motif.pse"
         cmd.save(str(motif_pse_file))
         
         if not quiet:
-            print(f"  Saved motif-aligned session to {motif_pse_file}")
+            print(f"  Saved session with highlighted motif regions to {motif_pse_file}")
         
         # Clean up the selections
         for obj in all_objects:
@@ -188,19 +212,21 @@ def process_pse_file(pse_file, motif_def, molecule, output_dir, quiet=False, mot
     # Clean up selections
     cmd.delete("template_motif")
     cmd.delete("pred_motif")
+    cmd.delete("template_whole")
+    cmd.delete("pred_whole")
     cmd.delete("all_motifs")
     
     return rmsd_values
 
 def parse_arguments():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description='Perform motif-specific alignment and RMSD calculation.')
+    parser = argparse.ArgumentParser(description='Calculate motif-specific RMSD values using whole-protein alignment.')
     parser.add_argument('--motif', type=str, required=True,
-                        help='Motif ID to use for alignment')
+                        help='Motif ID to use for RMSD calculation after whole-protein alignment')
     parser.add_argument('--save-motif-pse', action='store_true', default=True,
-                        help='Save motif-aligned PSE files (default: True)')
+                        help='Save PSE files with highlighted motif regions (default: True)')
     parser.add_argument('--no-save-motif-pse', dest='save_motif_pse', action='store_false',
-                        help='Do not save motif-aligned PSE files')
+                        help='Do not save PSE files with highlighted motif regions')
     parser.add_argument('--pse-files', type=str,
                         help='PSE files directory (default: from config)')
     
@@ -262,10 +288,10 @@ def main():
     
     # Create directory for motif-aligned PSE files if saving is enabled
     if args.save_motif_pse:
-        motif_pse_dir = pse_dir / "motifs" / args.motif
-        motif_pse_dir.mkdir(parents=True, exist_ok=True)
+        # Save directly in the pse_dir, not in a motifs subdirectory
+        motif_pse_dir = pse_dir
         if not args.quiet:
-            print(f"Created directory for motif-aligned PSE files: {motif_pse_dir}")
+            print(f"Using directory for PSE files with highlighted motif regions: {motif_pse_dir}")
     else:
         motif_pse_dir = None
     
@@ -307,8 +333,8 @@ def main():
         print(f"No RMSD values generated for motif {args.motif}")
         return
     
-    # Write RMSD values to CSV
-    csv_file = csv_dir / f'motif_rmsd_{args.motif}.csv'
+    # Write RMSD values to CSV in the PSE directory
+    csv_file = pse_dir / f'motif_rmsd_{args.motif}.csv'
     df = pd.DataFrame(all_rmsd_values)
     df.to_csv(csv_file, index=False)
     

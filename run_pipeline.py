@@ -315,9 +315,9 @@ def run_whole_protein_analysis(config, args, state_file=None, state=None, run_id
     
     # Add RMSD plot step
     rmsd_plot_cmd = [
-        "python", "src/plot_rmsd_heatmap.py",
+        "python", "src/plot_rmsd.py",
         f"--pse-files={config['directories']['pse_files']}",
-        f"--plots={config['directories']['plots']}"
+        f"--output={config['directories']['plots']}/rmsd_heatmap.png"
     ]
     
     # Add method options
@@ -340,10 +340,10 @@ def run_whole_protein_analysis(config, args, state_file=None, state=None, run_id
     
     # Add pLDDT plot step
     plddt_plot_cmd = [
-        "python", "src/plot_plddt_heatmap.py",
+        "python", "src/plot_plddt.py",
         f"--chai-output={config['directories']['chai_output']}",
         f"--boltz-output={config['directories']['boltz_output']}",
-        f"--plots={config['directories']['plots']}"
+        f"--output={config['directories']['plots']}/plddt_heatmap.png"
     ]
     
     # Add method options
@@ -467,9 +467,10 @@ def run_motif_analysis(config, args, state_file=None, state=None, run_id=None, m
     # Add motif RMSD plot step if RMSD metric is enabled
     if not metrics or "rmsd" in metrics:
         motif_rmsd_cmd = [
-            "python", "src/plot_motif_rmsd.py",
+            "python", "src/plot_rmsd.py",
             f"--motif={motif_id}",
-            f"--pse-files={analysis_run_dir}"  # Use the analysis run directory
+            f"--input={analysis_run_dir}",
+            f"--output={config['directories']['plots']}/motif_rmsd_heatmap_{motif_id}.png"
         ]
         
         # Add quiet option if specified
@@ -484,7 +485,7 @@ def run_motif_analysis(config, args, state_file=None, state=None, run_id=None, m
     
     # Add motif pLDDT extraction and plot steps if pLDDT metric is enabled
     if not metrics or "plddt" in metrics:
-        motif_plddt_cmd = [
+        motif_plddt_extract_cmd = [
             "python", "src/extract_motif_plddt.py",
             f"--motif={motif_id}",
             f"--pse-files={analysis_run_dir}"  # Use the analysis run directory
@@ -492,18 +493,19 @@ def run_motif_analysis(config, args, state_file=None, state=None, run_id=None, m
         
         # Add quiet option if specified
         if args.quiet:
-            motif_plddt_cmd.append("--quiet")
+            motif_plddt_extract_cmd.append("--quiet")
         
         pipeline_steps.append({
             "id": f"motif-plddt-extract-{motif_id}",
-            "command": motif_plddt_cmd,
+            "command": motif_plddt_extract_cmd,
             "description": f"Extracting motif-specific pLDDT values for {motif_id}"
         })
         
         motif_plddt_plot_cmd = [
-            "python", "src/plot_motif_plddt.py",
+            "python", "src/plot_plddt.py",
             f"--motif={motif_id}",
-            f"--pse-files={analysis_run_dir}"  # Use the analysis run directory
+            f"--input={analysis_run_dir}",
+            f"--output={config['directories']['plots']}/motif_plddt_heatmap_{motif_id}.png"
         ]
         
         # Add quiet option if specified
