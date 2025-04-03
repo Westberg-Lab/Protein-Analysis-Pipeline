@@ -45,23 +45,23 @@ def parse_arguments():
                         help='Analysis run ID to use (default: first enabled analysis run)')
     
     # Add common arguments
-    parser = config_loader.add_common_args(parser)
+    parser = config_loader.add_common_args(parser, exclude=['motif'])
     
     return parser.parse_args()
 
-def find_plddt_csv_files(csv_dir, motif_id=None, quiet=False):
+def find_plddt_csv_files(pse_dir, motif_id=None, quiet=False):
     """Find pLDDT CSV files in the specified directory.
     
     Args:
-        csv_dir: Directory to search in
+        pse_dir: PSE files directory to search in
         motif_id: Optional motif ID to filter by
         quiet: Whether to suppress output
         
     Returns:
         List of paths to CSV files
     """
-    if not csv_dir.exists() or not csv_dir.is_dir():
-        print(f"{csv_dir} directory not found.")
+    if not pse_dir.exists() or not pse_dir.is_dir():
+        print(f"{pse_dir} directory not found.")
         return []
     
     csv_files = []
@@ -71,16 +71,38 @@ def find_plddt_csv_files(csv_dir, motif_id=None, quiet=False):
         if not quiet:
             print(f"Looking for motif-specific pLDDT files for motif {motif_id}...")
         
-        # Look for motif_plddt_*.csv files in the csv directory
-        csv_files = list(csv_dir.glob(f"motif_plddt_{motif_id}*.csv"))
+        # Look for motif_plddt_*.csv files in the PSE directory
+        csv_files = list(pse_dir.glob(f"motif_plddt_{motif_id}*.csv"))
         if not csv_files:
-            csv_files = list(csv_dir.glob(f"motif_plddt_{motif_id}.csv"))
+            csv_files = list(pse_dir.glob(f"motif_plddt_{motif_id}.csv"))
+        
+        # Also look in subdirectories
+        for subdir in pse_dir.iterdir():
+            if subdir.is_dir():
+                subdir_files = list(subdir.glob(f"motif_plddt_{motif_id}*.csv"))
+                if subdir_files:
+                    csv_files.extend(subdir_files)
+                else:
+                    csv_file = subdir / f"motif_plddt_{motif_id}.csv"
+                    if csv_file.exists():
+                        csv_files.append(csv_file)
     else:
-        # Look for all pLDDT files
-        csv_files = list(csv_dir.glob("plddt_values_*.csv"))
+        # Look for all pLDDT files in the PSE directory
+        csv_files = list(pse_dir.glob("plddt_values_*.csv"))
         if not csv_files:
             # If no plddt_values_*.csv files found, look for motif_plddt_*.csv files
-            csv_files = list(csv_dir.glob("motif_plddt_*.csv"))
+            csv_files = list(pse_dir.glob("motif_plddt_*.csv"))
+        
+        # Also look in subdirectories
+        for subdir in pse_dir.iterdir():
+            if subdir.is_dir():
+                subdir_files = list(subdir.glob("plddt_values_*.csv"))
+                if subdir_files:
+                    csv_files.extend(subdir_files)
+                else:
+                    subdir_files = list(subdir.glob("motif_plddt_*.csv"))
+                    if subdir_files:
+                        csv_files.extend(subdir_files)
     
     if not quiet:
         print(f"Found {len(csv_files)} pLDDT CSV files")
@@ -390,8 +412,15 @@ def create_plddt_heatmap(data, output_file, config, full_config=None, motif_id=N
     # Rotate x-axis labels for better readability
     plt.xticks(rotation=45, ha="right")
     
-    # Adjust layout
-    plt.tight_layout()
+    # Add a note about BOLTZ using complex pLDDT if motif-specific
+    if motif_id:
+        # Adjust bottom margin to make room for the note
+        plt.subplots_adjust(bottom=0.15)
+        plt.figtext(0.1, 0.01, "Note: BOLTZ = complex pLDDT (whole protein)", 
+                   ha="center", fontsize=10, style="italic")
+    else:
+        # Use tight layout for non-motif plots
+        plt.tight_layout()
     
     # Save the figure
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
@@ -419,20 +448,20 @@ def main():
     # Handle both old and new configuration structures
     if "directories" in config:
         # Old configuration structure
-        csv_dir = Path(config["directories"]["csv"])
         plots_dir = Path(config["directories"]["plots"])
         chai_dir = Path(config["directories"]["chai_output"])
         boltz_dir = Path(config["directories"]["boltz_output"])
+        pse_dir = Path(config["directories"]["pse_files"])
     else:
         # New configuration structure
-        csv_dir = Path(config.get("csv", "csv"))
         plots_dir = Path(config.get("plots", "plots"))
         chai_dir = Path(config.get("chai_output", "OUTPUT/CHAI"))
         boltz_dir = Path(config.get("boltz_output", "OUTPUT/BOLTZ"))
+        pse_dir = Path(config.get("pse_files", "PSE_FILES"))
     
     # Create output directories
     plots_dir.mkdir(exist_ok=True)
-    csv_dir.mkdir(exist_ok=True)
+    pse_dir.mkdir(exist_ok=True, parents=True)
     
     # Determine input files and data source
     data = None
@@ -465,13 +494,13 @@ def main():
     else:
         # Auto-detect input files
         if args.motif:
-            # Look for motif-specific pLDDT files in the csv directory
-            csv_files = find_plddt_csv_files(csv_dir, args.motif, args.quiet)
+            # Look for motif-specific pLDDT files in the PSE directory
+            csv_files = find_plddt_csv_files(pse_dir, args.motif, args.quiet)
             if csv_files:
                 data = read_plddt_values(csv_files, args.quiet)
         else:
-            # Look for pLDDT files in the csv directory
-            csv_files = find_plddt_csv_files(csv_dir, None, args.quiet)
+            # Look for pLDDT files in the PSE directory
+            csv_files = find_plddt_csv_files(pse_dir, None, args.quiet)
             if csv_files:
                 data = read_plddt_values(csv_files, args.quiet)
             else:
@@ -536,7 +565,7 @@ def main():
                 # Extract and organize the data
                 data = organize_data_from_json(chai_files, boltz_files, chai_dir, boltz_dir, prediction_runs, args.quiet)
     
-    if not data:
+    if data is None or (isinstance(data, pd.DataFrame) and data.empty) or (isinstance(data, dict) and not data):
         print("No data found to visualize.")
         return
     
@@ -544,12 +573,40 @@ def main():
     if args.output:
         output_file = Path(args.output)
     else:
-        if args.motif:
-            output_file = plots_dir / f'motif_plddt_heatmap_{args.motif}.png'
-        elif args.analysis_run:
-            output_file = plots_dir / f'plddt_heatmap_{args.analysis_run}.png'
+        # Get analysis run name
+        analysis_run_name = None
+        if args.analysis_run:
+            analysis_run_name = args.analysis_run
+        elif args.input:
+            # Try to extract analysis run name from input path
+            input_path = Path(args.input)
+            if input_path.is_dir():
+                # The directory name might be the analysis run name
+                analysis_run_name = input_path.name
+            elif input_path.parent.name != "csv":
+                # The parent directory might be the analysis run name
+                analysis_run_name = input_path.parent.name
+        elif analysis_run:  # Use the analysis run determined earlier in the code
+            analysis_run_name = analysis_run.get("id")
+        elif args.motif:
+            # If no analysis run is specified, try to use the motif ID as part of the analysis run name
+            # This is a common naming convention: motif_id + "_analysis"
+            analysis_run_name = f"{args.motif}_analysis"
+        
+        # Create analysis run subdirectory in plots directory if we have an analysis run
+        if analysis_run_name:
+            plot_dir = plots_dir / analysis_run_name
+            plot_dir.mkdir(exist_ok=True, parents=True)
         else:
-            output_file = plots_dir / 'plddt_heatmap.png'
+            plot_dir = plots_dir
+        
+        # Set output file path
+        if args.motif:
+            output_file = plot_dir / f'motif_plddt_heatmap_{args.motif}.png'
+        elif analysis_run_name:
+            output_file = plot_dir / f'plddt_heatmap.png'
+        else:
+            output_file = plot_dir / 'plddt_heatmap.png'
     
     # Create heatmap
     success = create_plddt_heatmap(data, output_file, config, full_config, args.motif, args.quiet)
@@ -562,11 +619,20 @@ def main():
         if isinstance(data, dict):
             df = pd.DataFrame(data).T
             if args.motif:
-                csv_file = csv_dir / f'motif_plddt_{args.motif}.csv'
+                # Save CSV file in the PSE directory with the analysis run name as a subdirectory
+                if analysis_run_name:
+                    pse_run_dir = pse_dir / analysis_run_name
+                    pse_run_dir.mkdir(exist_ok=True, parents=True)
+                    csv_file = pse_run_dir / f'motif_plddt_{args.motif}.csv'
+                else:
+                    csv_file = pse_dir / f'motif_plddt_{args.motif}.csv'
             elif args.analysis_run:
-                csv_file = csv_dir / f'plddt_values_{args.analysis_run}.csv'
+                # Save CSV file in the PSE directory with the analysis run name as a subdirectory
+                pse_run_dir = pse_dir / args.analysis_run
+                pse_run_dir.mkdir(exist_ok=True, parents=True)
+                csv_file = pse_run_dir / f'plddt_values.csv'
             else:
-                csv_file = csv_dir / 'plddt_values.csv'
+                csv_file = pse_dir / 'plddt_values.csv'
             
             df.to_csv(csv_file)
             if not args.quiet:

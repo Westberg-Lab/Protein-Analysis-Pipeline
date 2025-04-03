@@ -46,6 +46,8 @@ def parse_arguments():
                         help='Maximum value for colormap (default: from config)')
     parser.add_argument('--pse-files', type=str,
                         help='PSE files directory (default: from config)')
+    parser.add_argument('--analysis-run', type=str, default=None,
+                        help='Analysis run ID to use (default: auto-detect from input)')
     
     # Add common arguments
     parser = config_loader.add_common_args(parser, exclude=['motif', 'pse-files'])
@@ -75,21 +77,41 @@ def find_rmsd_csv_files(pse_dir, template_name=None, motif_id=None, quiet=False)
         if not quiet:
             print(f"Looking for motif-specific RMSD files for motif {motif_id}...")
         
-        # Look for motif_rmsd_*.csv files in the csv directory
+        # Look for motif_rmsd_*.csv files in the PSE directory and its subdirectories
         if template_name:
             # If template is specified, look in that specific directory
             csv_file = pse_dir / f"motif_rmsd_{motif_id}_{template_name}.csv"
             if csv_file.exists():
                 csv_files.append(csv_file)
+            
+            # Also look in subdirectories
+            for subdir in pse_dir.iterdir():
+                if subdir.is_dir():
+                    csv_file = subdir / f"motif_rmsd_{motif_id}_{template_name}.csv"
+                    if csv_file.exists():
+                        csv_files.append(csv_file)
         else:
-            # Otherwise, look for all motif_rmsd_*.csv files
+            # Otherwise, look for all motif_rmsd_*.csv files in the PSE directory
             for csv_file in pse_dir.glob(f"motif_rmsd_{motif_id}*.csv"):
                 csv_files.append(csv_file)
+            
+            # Also look in subdirectories
+            for subdir in pse_dir.iterdir():
+                if subdir.is_dir():
+                    for csv_file in subdir.glob(f"motif_rmsd_{motif_id}*.csv"):
+                        csv_files.append(csv_file)
             
             # If no specific motif files found, look for general motif files
             if not csv_files:
                 for csv_file in pse_dir.glob(f"motif_rmsd_{motif_id}.csv"):
                     csv_files.append(csv_file)
+                
+                # Also look in subdirectories
+                for subdir in pse_dir.iterdir():
+                    if subdir.is_dir():
+                        csv_file = subdir / f"motif_rmsd_{motif_id}.csv"
+                        if csv_file.exists():
+                            csv_files.append(csv_file)
     else:
         # Look for whole protein RMSD files (rmsd_values.csv)
         if template_name:
@@ -103,9 +125,17 @@ def find_rmsd_csv_files(pse_dir, template_name=None, motif_id=None, quiet=False)
             # Otherwise, look in all subdirectories
             for subdir in pse_dir.iterdir():
                 if subdir.is_dir():
+                    # Check for rmsd_values.csv directly in the subdirectory
                     csv_file = subdir / 'rmsd_values.csv'
                     if csv_file.exists():
                         csv_files.append(csv_file)
+                    
+                    # Also check for rmsd_values.csv in subdirectories of the subdirectory
+                    for sub_subdir in subdir.iterdir():
+                        if sub_subdir.is_dir():
+                            csv_file = sub_subdir / 'rmsd_values.csv'
+                            if csv_file.exists():
+                                csv_files.append(csv_file)
     
     if not quiet:
         print(f"Found {len(csv_files)} RMSD CSV files")
@@ -186,6 +216,13 @@ def create_rmsd_heatmap(df, output_file, config, full_config=None, motif_id=None
         motif_def = config_loader.get_motif_definition(full_config, motif_id)
         if motif_def:
             motif_desc = motif_def.get("description", motif_id)
+    
+    # Check for duplicate entries
+    if df.duplicated(subset=['ligand', 'method']).any():
+        if not quiet:
+            print("Warning: Found duplicate entries. Aggregating by taking the mean of RMSD values.")
+        # Aggregate duplicate entries by taking the mean
+        df = df.groupby(['ligand', 'method'], as_index=False)['rmsd'].mean()
     
     # Pivot the data for the heatmap
     pivot_df = df.pivot(index='ligand', columns='method', values='rmsd')
@@ -348,14 +385,35 @@ def main():
     if args.output:
         output_file = Path(args.output)
     else:
+        # Get analysis run name
+        analysis_run_name = None
+        if args.analysis_run:
+            analysis_run_name = args.analysis_run
+        elif args.input:
+            # Try to extract analysis run name from input path
+            input_path = Path(args.input)
+            if input_path.is_dir():
+                # The directory name might be the analysis run name
+                analysis_run_name = input_path.name
+            elif input_path.parent.name != "csv":
+                # The parent directory might be the analysis run name
+                analysis_run_name = input_path.parent.name
+        
+        # Create analysis run subdirectory in plots directory if we have an analysis run
+        if analysis_run_name:
+            plot_dir = plots_dir / analysis_run_name
+            plot_dir.mkdir(exist_ok=True, parents=True)
+        else:
+            plot_dir = plots_dir
+        
         # Get reference name for the filename
         if args.motif:
-            output_file = plots_dir / f'motif_rmsd_heatmap_{args.motif}.png'
+            output_file = plot_dir / f'motif_rmsd_heatmap_{args.motif}.png'
         else:
             reference_name = args.reference
             if not reference_name and 'reference' in df.columns and not df['reference'].empty:
                 reference_name = df['reference'].iloc[0]
-            output_file = plots_dir / f'rmsd_heatmap_{reference_name}.png'
+            output_file = plot_dir / f'rmsd_heatmap_{reference_name}.png'
     
     # Create heatmap
     success = create_rmsd_heatmap(df, output_file, config, full_config, args.motif, args.vmin, args.vmax, args.quiet)

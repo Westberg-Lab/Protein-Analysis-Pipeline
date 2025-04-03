@@ -85,24 +85,73 @@ def extract_chai_plddt_for_motif(file_path, motif_def):
         with open(file_path, 'r') as f:
             data = json.load(f)
             
-            # Get the pLDDT values array
-            plddt_array = data.get("cand_0", {}).get("plddt", [])
+            # Debug: Print keys in the JSON
+            print(f"CHAI JSON keys: {list(data.keys())}")
+            
+            # Find the first candidate key (usually starts with "cand_")
+            cand_key = None
+            for key in data.keys():
+                if key.startswith("cand_"):
+                    cand_key = key
+                    break
+            
+            if cand_key:
+                print(f"CHAI: Found candidate key: {cand_key}")
+                print(f"CHAI {cand_key} keys: {list(data[cand_key].keys())}")
+                
+                # Get the per_atom_plddt nested array
+                per_atom_plddt = data.get(cand_key, {}).get("per_atom_plddt", [])
+                
+                # Flatten the nested array if it exists
+                if per_atom_plddt and isinstance(per_atom_plddt, list) and len(per_atom_plddt) > 0:
+                    # Check if it's a nested array
+                    if isinstance(per_atom_plddt[0], list):
+                        plddt_array = per_atom_plddt[0]  # Take the first array in the nested structure
+                    else:
+                        plddt_array = per_atom_plddt
+                else:
+                    plddt_array = []
+            else:
+                print(f"CHAI: No candidate key found in {file_path}")
+                plddt_array = []
+            
+            # Debug: Print pLDDT array length
+            print(f"CHAI pLDDT array length: {len(plddt_array)}")
             
             if not plddt_array:
+                print(f"CHAI: No pLDDT array found in {file_path}")
                 return None
+            
+            # Debug: Try to extract all pLDDT values
+            if plddt_array:
+                avg_all_plddt = sum(plddt_array) / len(plddt_array)
+                print(f"CHAI: Average pLDDT for all residues: {avg_all_plddt}")
             
             # Extract pLDDT values for the motif residues
             motif_residues = motif_def.get("residues", [])
-            motif_plddt_values = []
+            print(f"CHAI: Motif residues: {motif_residues}")
+            print(f"CHAI: Motif has whole_protein flag: {motif_def.get('whole_protein', False)}")
             
-            for residue in motif_residues:
-                # Adjust for 0-based indexing if needed
-                idx = residue - 1  # Assuming residue numbers start from 1
-                if 0 <= idx < len(plddt_array):
-                    motif_plddt_values.append(plddt_array[idx])
+            # If this is a whole protein motif, use all residues
+            if motif_def.get("whole_protein", False):
+                print(f"CHAI: Using all residues for whole protein motif")
+                motif_plddt_values = plddt_array
+            else:
+                motif_plddt_values = []
+                
+                for residue in motif_residues:
+                    # Adjust for 0-based indexing if needed
+                    idx = residue - 1  # Assuming residue numbers start from 1
+                    if 0 <= idx < len(plddt_array):
+                        motif_plddt_values.append(plddt_array[idx])
+                    else:
+                        print(f"CHAI: Residue {residue} (idx {idx}) is out of bounds (array length: {len(plddt_array)})")
             
             if not motif_plddt_values:
+                print(f"CHAI: No valid pLDDT values found for motif residues")
                 return None
+            
+            print(f"CHAI: Found {len(motif_plddt_values)} valid pLDDT values for motif residues")
             
             # Calculate average pLDDT for the motif
             avg_plddt = sum(motif_plddt_values) / len(motif_plddt_values)
@@ -135,27 +184,20 @@ def extract_boltz_plddt_for_motif(file_path, motif_def):
         with open(file_path, 'r') as f:
             data = json.load(f)
             
-            # Get the pLDDT values array
-            plddt_array = data.get("plddt", [])
+            # Debug: Print keys in the JSON
+            print(f"BOLTZ JSON keys: {list(data.keys())}")
             
-            if not plddt_array:
+            # Get the complex_plddt value (single value for the whole complex)
+            complex_plddt = data.get("complex_plddt", 0)
+            
+            print(f"BOLTZ complex_plddt: {complex_plddt}")
+            
+            if not complex_plddt:
+                print(f"BOLTZ: No complex_plddt value found in {file_path}")
                 return None
             
-            # Extract pLDDT values for the motif residues
-            motif_residues = motif_def.get("residues", [])
-            motif_plddt_values = []
-            
-            for residue in motif_residues:
-                # Adjust for 0-based indexing if needed
-                idx = residue - 1  # Assuming residue numbers start from 1
-                if 0 <= idx < len(plddt_array):
-                    motif_plddt_values.append(plddt_array[idx])
-            
-            if not motif_plddt_values:
-                return None
-            
-            # Calculate average pLDDT for the motif
-            avg_plddt = sum(motif_plddt_values) / len(motif_plddt_values)
+            # For BOLTZ, we only use the complex_plddt value for all motif types
+            print(f"BOLTZ: Using complex_plddt value for motif {motif_def.get('id')}")
             
             # Extract method and ligand information from the file path
             path_parts = file_path.parts
@@ -182,7 +224,7 @@ def extract_boltz_plddt_for_motif(file_path, motif_def):
             return {
                 "method": method,
                 "ligand": ligand,
-                "plddt": avg_plddt,
+                "plddt": complex_plddt,
                 "motif": motif_def.get("id"),
                 "molecule": molecule_name
             }
@@ -220,7 +262,6 @@ def main():
     # Handle both old and new configuration structures
     if "directories" in config:
         # Old configuration structure
-        csv_dir = Path(config["directories"]["csv"])
         chai_dir = Path(config["directories"]["chai_output"])
         boltz_dir = Path(config["directories"]["boltz_output"])
         
@@ -231,7 +272,6 @@ def main():
             pse_dir = Path(config["directories"]["pse_files"])
     else:
         # New configuration structure
-        csv_dir = Path(config.get("csv", "csv"))
         chai_dir = Path(config.get("chai_output", "OUTPUT/CHAI"))
         boltz_dir = Path(config.get("boltz_output", "OUTPUT/BOLTZ"))
         
@@ -242,7 +282,7 @@ def main():
             pse_dir = Path(config.get("pse_files", "PSE_FILES"))
     
     # Create output directory
-    csv_dir.mkdir(exist_ok=True)
+    pse_dir.mkdir(exist_ok=True, parents=True)
     
     # Process each molecule
     all_plddt_values = []
@@ -273,8 +313,8 @@ def main():
         print(f"No pLDDT values generated for motif {args.motif}")
         return
     
-    # Write pLDDT values to CSV
-    csv_file = csv_dir / f'motif_plddt_{args.motif}.csv'
+    # Write pLDDT values to CSV in the PSE directory
+    csv_file = pse_dir / f'motif_plddt_{args.motif}.csv'
     df = pd.DataFrame(all_plddt_values)
     df.to_csv(csv_file, index=False)
     
