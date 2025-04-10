@@ -2,18 +2,17 @@
 """
 Script to create PyMOL session (.pse) files for each unique directory name that exists
 in both CHAI and BOLTZ outputs. Each .pse file will include:
-1. The pred.model_idx_4.cif protein structure from CHAI (with and without MSA)
-2. The pred.model_idx_4.cif protein structure from BOLTZ (with and without MSA)
+1. The best CHAI protein structure based on complex-plddt score (with and without MSA)
+2. The model_0.cif protein structure from BOLTZ (with and without MSA)
 3. The template file from the current working directory
 
 Usage:
-    python combine_cif_files.py [--model-idx N] [--template TEMPLATE_FILE]
+    python combine_cif_files.py [--template TEMPLATE_FILE]
                                [--chai-output CHAI_DIR] [--boltz-output BOLTZ_DIR]
                                [--pse-files PSE_DIR] [--molecules MOLECULES]
                                [--quiet]
 
 Options:
-    --model-idx N        Model index to search for (default: from config)
     --template FILE      Template file (default: from config)
     --chai-output DIR    CHAI output directory (default: from config)
     --boltz-output DIR   BOLTZ output directory (default: from config)
@@ -92,7 +91,59 @@ def sanitize_name(name):
     sanitized = name.replace('[', '_').replace(']', '_').replace('(', '_').replace(')', '_')
     return sanitized
 
-def find_cif_file(base_dir, name, with_msa, model_idx, quiet=False):
+def find_best_chai_model_idx(search_dir, quiet=False):
+    """
+    Find the best model index based on complex-plddt score in outs.json.
+    
+    Args:
+        search_dir (Path): Directory containing the outs.json file
+        quiet (bool): Whether to suppress detailed output
+        
+    Returns:
+        int: The model index with the highest complex-plddt score
+    """
+    outs_json_path = search_dir / "outs.json"
+    
+    if not outs_json_path.exists():
+        if not quiet:
+            print(f"Warning: outs.json not found in {search_dir}")
+        return 0  # Default to model 0 if outs.json not found
+    
+    try:
+        with open(outs_json_path, 'r') as f:
+            data = json.load(f)
+        
+        # Initialize variables to track best model
+        best_idx = 0
+        best_plddt = 0
+        
+        # Check each candidate model (cand_0 to cand_4)
+        for i in range(5):  # Check models 0-4
+            cand_key = f"cand_{i}"
+            if cand_key in data:
+                # Extract complex_plddt (might be a list with one value)
+                plddt = data[cand_key].get("complex_plddt", [0])
+                if isinstance(plddt, list) and plddt:
+                    plddt_value = plddt[0]
+                else:
+                    plddt_value = plddt
+                
+                # Update best if this one is better
+                if plddt_value > best_plddt:
+                    best_plddt = plddt_value
+                    best_idx = i
+        
+        if not quiet:
+            print(f"Selected best model for {search_dir.parent.name}/{search_dir.name}: idx_{best_idx} with pLDDT {best_plddt}")
+        
+        return best_idx
+    
+    except Exception as e:
+        if not quiet:
+            print(f"Error reading outs.json in {search_dir}: {e}")
+        return 0  # Default to model 0 if there's an error
+
+def find_cif_file(base_dir, name, with_msa, quiet=False):
     """
     Find the CIF file in the specified directory.
     
@@ -101,11 +152,13 @@ def find_cif_file(base_dir, name, with_msa, model_idx, quiet=False):
     more robust than parsing based on underscores, as it handles cases where
     molecule names themselves contain underscores.
     
+    For CHAI files, the best model based on complex-plddt score is used.
+    For BOLTZ files, model_0 is always used.
+    
     Args:
         base_dir (Path): Base directory to search in (CHAI or BOLTZ output)
         name (str): Name of the molecule combination (e.g., hM1Dshort_8E9X_MT3)
         with_msa (bool): Whether to look in the _with_MSA directory
-        model_idx (int): Model index to search for
         quiet (bool): Whether to suppress detailed output
         
     Returns:
@@ -136,8 +189,11 @@ def find_cif_file(base_dir, name, with_msa, model_idx, quiet=False):
         else:
             search_dir = base_dir / parent_dir / name
         
-        # Look for the CIF file with the correct model_idx
-        cif_file = search_dir / f"pred.model_idx_{model_idx}.cif"
+        # Find the best model index based on complex-plddt
+        best_idx = find_best_chai_model_idx(search_dir, quiet)
+        
+        # Look for the CIF file with the best model_idx
+        cif_file = search_dir / f"pred.model_idx_{best_idx}.cif"
         
         # Check if file exists
         if cif_file.exists():
@@ -172,7 +228,7 @@ def find_cif_file(base_dir, name, with_msa, model_idx, quiet=False):
         print(f"No CIF file found for {name}")
     return None
 
-def create_pse_files(unique_names, chai_dir, boltz_dir, template_file, model_idx, output_dir, config, quiet=False):
+def create_pse_files(unique_names, chai_dir, boltz_dir, template_file, output_dir, config, quiet=False):
     """Create .pse files for each unique name."""
     # Get reference name from template file
     reference_name = template_file.name.split('.')[0]  # Remove file extension
@@ -255,7 +311,7 @@ def create_pse_files(unique_names, chai_dir, boltz_dir, template_file, model_idx
         
         # CHAI without MSA
         if config["methods"]["use_chai"]:
-            chai_file = find_cif_file(chai_dir, name, False, model_idx, quiet)
+            chai_file = find_cif_file(chai_dir, name, False, quiet)
             if chai_file:
                 structure_name = f'chai_{sanitized_name}'
                 cmd.load(str(chai_file), structure_name)
@@ -278,7 +334,7 @@ def create_pse_files(unique_names, chai_dir, boltz_dir, template_file, model_idx
         
         # CHAI with MSA - Always try to load MSA files regardless of the use_msa flag
         if config["methods"]["use_chai"]:
-            chai_msa_file = find_cif_file(chai_dir, name, True, model_idx, quiet)
+            chai_msa_file = find_cif_file(chai_dir, name, True, quiet)
             if chai_msa_file:
                 structure_name = f'chai_msa_{sanitized_name}'
                 cmd.load(str(chai_msa_file), structure_name)
@@ -301,7 +357,7 @@ def create_pse_files(unique_names, chai_dir, boltz_dir, template_file, model_idx
         
         # BOLTZ without MSA
         if config["methods"]["use_boltz"]:
-            boltz_file = find_cif_file(boltz_dir, name, False, model_idx, quiet)
+            boltz_file = find_cif_file(boltz_dir, name, False, quiet)
             if boltz_file:
                 structure_name = f'boltz_{sanitized_name}'
                 cmd.load(str(boltz_file), structure_name)
@@ -324,7 +380,7 @@ def create_pse_files(unique_names, chai_dir, boltz_dir, template_file, model_idx
         
         # BOLTZ with MSA - Always try to load MSA files regardless of the use_msa flag
         if config["methods"]["use_boltz"]:
-            boltz_msa_file = find_cif_file(boltz_dir, name, True, model_idx, quiet)
+            boltz_msa_file = find_cif_file(boltz_dir, name, True, quiet)
             if boltz_msa_file:
                 structure_name = f'boltz_msa_{sanitized_name}'
                 cmd.load(str(boltz_msa_file), structure_name)
@@ -464,7 +520,7 @@ def get_templates(config, args, full_config=None):
     # If no templates found anywhere, return an empty list
     return []
 
-def process_template(template_file, unique_names, chai_dir, boltz_dir, model_idx, output_dir, csv_dir, config, quiet=False):
+def process_template(template_file, unique_names, chai_dir, boltz_dir, output_dir, csv_dir, config, quiet=False):
     """Process a single template file."""
     if not template_file.exists():
         print(f"Template file {template_file} does not exist.")
@@ -475,7 +531,7 @@ def process_template(template_file, unique_names, chai_dir, boltz_dir, model_idx
     
     # Create PSE files and get RMSD values, reference name, and template directory
     rmsd_values, reference_name, template_dir = create_pse_files(
-        unique_names, chai_dir, boltz_dir, template_file, model_idx, output_dir, config, quiet
+        unique_names, chai_dir, boltz_dir, template_file, output_dir, config, quiet
     )
     
     if not rmsd_values:
@@ -556,10 +612,6 @@ def main():
         csv_dir = Path(config.get("csv", "csv"))
         templates_dir = Path(config.get("templates_dir", "templates"))
     
-    # Get model index from config with fallback
-    model_idx = config.get("templates", {}).get("model_idx", 
-               config.get("model_idx", 4))
-    
     # Find unique names
     all_unique_names = find_unique_names(chai_dir, boltz_dir, config, args.quiet)
     
@@ -607,7 +659,7 @@ def main():
             
             # Process this molecule with its specific template
             rmsd_values, reference_name, _ = create_pse_files(
-                [name], chai_dir, boltz_dir, molecule_template, model_idx, output_dir, config, args.quiet
+                [name], chai_dir, boltz_dir, molecule_template, output_dir, config, args.quiet
             )
             
             if rmsd_values:
@@ -623,7 +675,7 @@ def main():
             if not args.quiet:
                 print(f"Using command line template for {name}: {template_file}")
             
-            if process_template(template_file, [name], chai_dir, boltz_dir, model_idx, output_dir, csv_dir, config, args.quiet):
+            if process_template(template_file, [name], chai_dir, boltz_dir, output_dir, csv_dir, config, args.quiet):
                 templates_processed += 1
         else:
             # No template available for this molecule

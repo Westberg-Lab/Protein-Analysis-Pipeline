@@ -49,7 +49,7 @@ def find_pse_files_for_molecule(pse_dir, molecule_name):
     return pse_files
 
 def process_pse_file(pse_file, motif_def, molecule, output_dir, quiet=False, motif_pse_dir=None):
-    """Process a PyMOL session file to calculate motif-specific RMSD using whole-protein alignment."""
+    """Process a PyMOL session file to calculate motif-specific RMSD."""
     # Reset PyMOL
     cmd.reinitialize()
     
@@ -73,19 +73,8 @@ def process_pse_file(pse_file, motif_def, molecule, output_dir, quiet=False, mot
         print(f"Warning: Could not identify template object in {pse_file}")
         return None
     
-    # Create a selection for the motif residues
+    # Get chain from motif definition
     chain = motif_def.get("chain", "A")
-    
-    # Check if this is a whole protein motif
-    if motif_def.get("whole_protein", False):
-        # Select the entire chain
-        motif_selection = f"chain {chain}"
-        if not quiet:
-            print(f"Using whole protein selection for chain {chain}")
-    else:
-        # Use the specified residue list
-        residue_list = ','.join(str(r) for r in motif_def.get("residues", []))
-        motif_selection = f"chain {chain} and resi {residue_list}"
     
     # Create a dictionary to store RMSD values
     rmsd_values = []
@@ -111,38 +100,50 @@ def process_pse_file(pse_file, motif_def, molecule, output_dir, quiet=False, mot
         else:
             continue
         
-        # Two-Step Approach: Align whole proteins, then calculate RMSD for motif regions
         try:
-            # Step 1: Align the whole proteins
-            # Create selections for the whole proteins (using chain A or the specified chain)
-            whole_chain = f"chain {chain}"
-            cmd.select("template_whole", f"{template_obj} and {whole_chain}")
-            cmd.select("pred_whole", f"{obj} and {whole_chain}")
-            
-            # Check if whole protein selections are valid
-            if cmd.count_atoms("template_whole") == 0 or cmd.count_atoms("pred_whole") == 0:
-                print(f"Warning: Empty whole protein selection for {obj}")
-                continue
-            
-            # Align the whole proteins
-            alignment_result = cmd.align("pred_whole", "template_whole")
-            whole_protein_rmsd = alignment_result[0]  # First element is RMSD
-            
-            if not quiet:
-                print(f"  Aligned whole protein {obj} to {template_obj}, RMSD: {whole_protein_rmsd:.4f}")
-            
-            # Step 2: Calculate RMSD for just the motif regions
-            # Create temporary selections for the motif regions
-            cmd.select("template_motif", f"{template_obj} and {motif_selection}")
-            cmd.select("pred_motif", f"{obj} and {motif_selection}")
-            
-            # Check if motif selections are valid
-            if cmd.count_atoms("template_motif") == 0 or cmd.count_atoms("pred_motif") == 0:
-                print(f"Warning: Empty motif selection for {obj}")
-                continue
-            
-            # Calculate RMSD for motif regions after whole-protein alignment
-            rmsd = cmd.rms_cur("pred_motif", "template_motif")
+            # Check if this is a whole protein motif
+            if motif_def.get("whole_protein", False):
+                # For whole protein motifs, align the entire chains and use the RMSD directly
+                whole_chain = f"chain {chain}"
+                cmd.select("template_whole", f"{template_obj} and {whole_chain}")
+                cmd.select("pred_whole", f"{obj} and {whole_chain}")
+                
+                # Check if whole protein selections are valid
+                if cmd.count_atoms("template_whole") == 0 or cmd.count_atoms("pred_whole") == 0:
+                    print(f"Warning: Empty whole protein selection for {obj}")
+                    continue
+                
+                # Align the whole proteins and get RMSD directly
+                alignment_result = cmd.align("pred_whole", "template_whole")
+                rmsd = alignment_result[0]  # First element is RMSD
+                
+                if not quiet:
+                    print(f"  Aligned whole protein {obj} to {template_obj}, RMSD: {rmsd:.4f}")
+            else:
+                # For specific residue motifs, we need both residues and template_residues
+                if "residues" not in motif_def or "template_residues" not in motif_def:
+                    print(f"Error: Both 'residues' and 'template_residues' must be specified for motif {motif_def.get('id')}")
+                    continue
+                
+                # Create residue lists for selection
+                residue_list = ','.join(str(r) for r in motif_def.get("residues", []))
+                template_residue_list = ','.join(str(r) for r in motif_def.get("template_residues", []))
+                
+                # Create selections for the specific residues
+                cmd.select("template_motif", f"{template_obj} and chain {chain} and resi {template_residue_list}")
+                cmd.select("pred_motif", f"{obj} and chain {chain} and resi {residue_list}")
+                
+                # Check if motif selections are valid
+                if cmd.count_atoms("template_motif") == 0 or cmd.count_atoms("pred_motif") == 0:
+                    print(f"Warning: Empty motif selection for {obj}")
+                    continue
+                
+                # Align the specific residues and get RMSD directly
+                alignment_result = cmd.align("pred_motif", "template_motif")
+                rmsd = alignment_result[3]  # 4th element is the RMSD before refinement
+                
+                if not quiet:
+                    print(f"  Aligned motif residues {obj} to {template_obj}, RMSD: {rmsd:.4f}")
             
             # Store the RMSD value
             rmsd_values.append({
@@ -153,9 +154,6 @@ def process_pse_file(pse_file, motif_def, molecule, output_dir, quiet=False, mot
                 'molecule': molecule,
                 'reference': Path(pse_file).parent.name
             })
-            
-            if not quiet:
-                print(f"  Calculated RMSD for {obj} against {template_obj} using motif {motif_def.get('id')}, RMSD: {rmsd:.4f}")
         
         except pymol.CmdException as e:
             print(f"  Error calculating RMSD for {obj}: {e}")
@@ -186,8 +184,12 @@ def process_pse_file(pse_file, motif_def, molecule, output_dir, quiet=False, mot
                 # Select the entire chain
                 cmd.select(motif_sel_name, f"{obj} and chain {chain}")
             else:
-                # Use the specified residue list
-                residue_list = ','.join(str(r) for r in motif_def.get("residues", []))
+                # Use the specified residue list (for the prediction objects) or template residue list (for the template)
+                if obj == template_obj:
+                    residue_list = ','.join(str(r) for r in motif_def.get("template_residues", []))
+                else:
+                    residue_list = ','.join(str(r) for r in motif_def.get("residues", []))
+                
                 cmd.select(motif_sel_name, f"{obj} and chain {chain} and resi {residue_list}")
             
             # Show as sticks only (no spheres)
@@ -254,6 +256,15 @@ def main():
         print(f"Error: Motif '{args.motif}' not found in configuration")
         return
     
+    # Validate motif definition
+    if not motif_def.get("whole_protein", False):
+        if "residues" not in motif_def:
+            print(f"Error: 'residues' must be specified for motif {args.motif}")
+            return
+        if "template_residues" not in motif_def:
+            print(f"Error: 'template_residues' must be specified for motif {args.motif}")
+            return
+    
     # Get molecules for this motif
     molecules = motif_def.get("molecules", [])
     if not molecules:
@@ -295,11 +306,11 @@ def main():
     else:
         motif_pse_dir = None
     
-    # Check if this motif has a specific template and model_idx
-    template_path, model_idx = config_loader.get_motif_template_and_model_idx(full_config, args.motif, templates_dir)
+    # Check if this motif has a specific template
+    template_path = config_loader.get_motif_template_path(full_config, args.motif, templates_dir)
     if template_path and template_path.exists():
         if not args.quiet:
-            print(f"Found motif-specific template: {template_path} (model_idx: {model_idx})")
+            print(f"Found motif-specific template: {template_path}")
     
     # Process each molecule
     all_rmsd_values = []

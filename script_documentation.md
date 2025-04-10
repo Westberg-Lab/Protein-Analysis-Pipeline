@@ -1,6 +1,6 @@
 # Protein Prediction Pipeline: Detailed Script Documentation
 
-This document provides detailed documentation for each Python script in the protein prediction pipeline.
+This document provides detailed documentation for each Python script in the protein prediction pipeline. (NOTE: changes have been made, so not all information is up to date!)
 
 ## Table of Contents
 
@@ -24,9 +24,11 @@ This document provides detailed documentation for each Python script in the prot
 ## run_pipeline.py
 
 ### Purpose
+
 The master script that orchestrates the entire protein prediction pipeline from start to finish.
 
 ### Functionality
+
 - Archives previous outputs
 - Runs prediction steps (CHAI and BOLTZ)
 - Runs analysis steps (whole protein and motif-specific)
@@ -35,6 +37,7 @@ The master script that orchestrates the entire protein prediction pipeline from 
 - Supports running multiple prediction and analysis runs in a single pipeline execution
 
 ### Command-line Arguments
+
 ```
 python run_pipeline.py [--config CONFIG_FILE] [--no-archive] [--delete-outputs] [--skip-step STEP]
                       [--use-chai] [--no-chai] [--use-boltz] [--no-boltz]
@@ -48,6 +51,7 @@ python run_pipeline.py [--config CONFIG_FILE] [--no-archive] [--delete-outputs] 
 ```
 
 ### Key Functions
+
 - `parse_arguments()`: Parses command-line arguments
 - `compute_config_hash()`: Computes a hash of the configuration to detect changes
 - `read_state_file()`: Reads the pipeline state file
@@ -62,10 +66,12 @@ python run_pipeline.py [--config CONFIG_FILE] [--no-archive] [--delete-outputs] 
 - `main()`: Main function that orchestrates the pipeline
 
 ### Dependencies
+
 - `config_loader.py`: For loading and updating configuration
 - All other scripts in the pipeline
 
 ### Example Usage
+
 ```bash
 # Run the entire pipeline with default settings
 python run_pipeline.py
@@ -100,9 +106,11 @@ python run_pipeline.py --resume
 ## config_loader.py
 
 ### Purpose
+
 Loads and manages configuration for the protein prediction pipeline.
 
 ### Functionality
+
 - Loads configuration from a JSON file
 - Supports multiple prediction and analysis runs in a single file
 - Provides default values if the file is not found
@@ -111,6 +119,7 @@ Loads and manages configuration for the protein prediction pipeline.
 - Retrieves motif definitions and templates
 
 ### Key Functions
+
 - `load_config(config_file='pipeline_config.json')`: Loads configuration from a JSON file
 - `deep_merge(base, override)`: Deep merges two dictionaries
 - `get_merged_config(config, prediction_id=None)`: Gets a merged configuration by combining global settings with a specific prediction run
@@ -124,6 +133,7 @@ Loads and manages configuration for the protein prediction pipeline.
 - `add_common_args(parser, exclude=None)`: Adds common arguments to an ArgumentParser
 
 ### Configuration Structure
+
 The configuration file has three main sections:
 
 1. **Global Settings**: Common settings shared across all runs
@@ -221,6 +231,7 @@ The configuration file has three main sections:
 ```
 
 ### Example Usage
+
 ```python
 # Load configuration
 full_config = config_loader.load_config()
@@ -246,9 +257,11 @@ template_path, model_idx = config_loader.get_motif_template_and_model_idx(full_c
 ## archive_and_clean.py
 
 ### Purpose
+
 Archives previous outputs and creates fresh directories for new runs.
 
 ### Functionality
+
 - Creates a timestamped archive directory
 - Moves previous output directories and files to the archive
 - Copies configuration files (molecules.json and pipeline_config.json) to the archive
@@ -256,11 +269,13 @@ Archives previous outputs and creates fresh directories for new runs.
 - Can delete previous outputs without archiving if requested
 
 ### Command-line Arguments
+
 ```
 python archive_and_clean.py [--no-archive]
 ```
 
 ### Key Functions
+
 - `parse_arguments()`: Parses command-line arguments
 - `create_archive_directory()`: Creates a timestamped archive directory
 - `is_file_empty()`: Checks if a file is empty (zero bytes)
@@ -274,11 +289,13 @@ python archive_and_clean.py [--no-archive]
 - `main()`: Main function that orchestrates the archiving and cleaning process
 
 ### Directories and Files Handled
+
 - Directories: "CHAI_FASTA", "BOLTZ_YAML", "OUTPUT", "PSE_FILES", "plots", "csv"
 - Files to archive: "rmsd_values.csv", "plddt_values.csv", "rmsd_heatmap.png", "plddt_heatmap.png"
 - Configuration files to copy: "molecules.json", "pipeline_config.json"
 
 ### Example Usage
+
 ```bash
 # Archive previous outputs and create fresh directories
 python archive_and_clean.py
@@ -292,19 +309,24 @@ python archive_and_clean.py --no-archive
 ## generate_chai_fasta.py
 
 ### Purpose
+
 Generates FASTA files for protein combinations based on molecule definitions.
 
 ### Functionality
+
 - Loads molecule definitions from a JSON file
 - Generates FASTA files for combinations of molecules
 - Creates a directory structure for organizing the FASTA files
 
 ### Key Functions
+
 - `load_molecules(json_file="molecules.json")`: Loads molecule definitions from a JSON file
 - `generate_fasta_files(output_base_dir="CHAI_FASTA")`: Generates FASTA files for combinations
 
 ### Input Format
+
 The script expects a JSON file with the following structure:
+
 ```json
 {
   "molecule_1": [
@@ -321,7 +343,9 @@ The script expects a JSON file with the following structure:
 ```
 
 ### Output Format
+
 The script generates FASTA files with the following format:
+
 ```
 >protein|name=molecule_name_1
 SEQUENCE_1
@@ -330,6 +354,7 @@ SEQUENCE_3
 ```
 
 ### Example Usage
+
 ```bash
 # Generate FASTA files with default settings
 python generate_chai_fasta.py
@@ -340,19 +365,24 @@ python generate_chai_fasta.py
 ## generate_boltz_yaml.py
 
 ### Purpose
+
 Generates YAML files for protein combinations based on molecule definitions, following the Boltz-1 schema.
 
 ### Functionality
+
 - Loads molecule definitions from a JSON file
 - Generates YAML files for combinations of molecules
 - Creates a directory structure for organizing the YAML files
 
 ### Key Functions
+
 - `load_molecules(json_file="molecules.json")`: Loads molecule definitions from a JSON file
 - `generate_yaml_files(output_base_dir="BOLTZ_YAML", use_msa=False)`: Generates YAML files for combinations
 
 ### Input Format
+
 The script expects a JSON file with the following structure:
+
 ```json
 {
   "molecule_1": [
@@ -369,7 +399,9 @@ The script expects a JSON file with the following structure:
 ```
 
 ### Output Format
+
 The script generates YAML files with the following format:
+
 ```yaml
 sequences:
   - protein:
@@ -383,6 +415,7 @@ sequences:
 ```
 
 ### Example Usage
+
 ```bash
 # Generate YAML files with default settings
 python generate_boltz_yaml.py
@@ -393,32 +426,38 @@ python generate_boltz_yaml.py
 ## run_chai_apptainer.py
 
 ### Purpose
+
 Runs CHAI protein structure prediction using Apptainer containers.
 
 ### Functionality
+
 - Processes each FASTA file in the input directory
 - Runs the CHAI prediction tool on each FASTA file
 - Supports MSA-based predictions
 - Skips files that have already been processed
 
 ### Command-line Arguments
+
 ```
 python run_chai_apptainer.py [--input INPUT_DIR] [--output OUTPUT_DIR] 
                             [--use-msa] [--use-msa-dir] [--quiet]
 ```
 
 ### Key Functions
+
 - `parse_arguments()`: Parses command-line arguments
 - `get_msa_config(use_msa, use_msa_dir)`: Gets MSA configuration based on command-line arguments
 - `run_apptainer_commands(input_dir='CHAI_FASTA', output_dir='OUTPUT/CHAI', use_msa=False, use_msa_dir=False, quiet=False)`: Runs apptainer commands for each FASTA file in the input directory
 - `main()`: Main function that orchestrates the CHAI prediction process
 
 ### Apptainer Command
+
 ```bash
 apptainer run --nv /emcc/westberg/shared/containers/chai.sif input_paths=<fasta_file> outdir=<output_dir> [msa_server=1] [msa_directory=CHAI_MSAs]
 ```
 
 ### Example Usage
+
 ```bash
 # Run CHAI predictions with default settings
 python run_chai_apptainer.py
@@ -438,32 +477,38 @@ python run_chai_apptainer.py --input custom_fasta --output custom_output
 ## run_boltz_apptainer.py
 
 ### Purpose
+
 Runs BOLTZ protein structure prediction using Apptainer containers.
 
 ### Functionality
+
 - Processes each YAML file in the input directory
 - Runs the BOLTZ prediction tool on each YAML file
 - Supports MSA-based predictions
 - Skips files that have already been processed
 
 ### Command-line Arguments
+
 ```
 python run_boltz_apptainer.py [--input INPUT_DIR] [--output OUTPUT_DIR] 
                              [--use-msa] [--quiet]
 ```
 
 ### Key Functions
+
 - `parse_arguments()`: Parses command-line arguments
 - `get_msa_config(use_msa)`: Gets MSA configuration based on command-line arguments
 - `run_apptainer_commands(input_dir='BOLTZ_YAML', output_dir='OUTPUT/BOLTZ', use_msa=False, quiet=False)`: Runs apptainer commands for each YAML file in the input directory
 - `main()`: Main function that orchestrates the BOLTZ prediction process
 
 ### Apptainer Command
+
 ```bash
 apptainer run --nv /emcc/westberg/shared/containers/boltz.sif <yaml_file> --out_dir=<output_dir> [--use_msa_server]
 ```
 
 ### Example Usage
+
 ```bash
 # Run BOLTZ predictions with default settings
 python run_boltz_apptainer.py
@@ -480,9 +525,11 @@ python run_boltz_apptainer.py --input custom_yaml --output custom_output
 ## combine_cif_files.py
 
 ### Purpose
+
 Creates PyMOL session (.pse) files for each unique directory name that exists in both CHAI and BOLTZ outputs.
 
 ### Functionality
+
 - Finds protein structures from both CHAI and BOLTZ outputs
 - Loads structures into PyMOL
 - Aligns structures to templates
@@ -492,6 +539,7 @@ Creates PyMOL session (.pse) files for each unique directory name that exists in
 - Supports molecule-specific templates
 
 ### Command-line Arguments
+
 ```
 python combine_cif_files.py [--model-idx N] [--template TEMPLATE_FILE]
                            [--chai-output CHAI_DIR] [--boltz-output BOLTZ_DIR]
@@ -499,6 +547,7 @@ python combine_cif_files.py [--model-idx N] [--template TEMPLATE_FILE]
 ```
 
 ### Key Functions
+
 - `parse_arguments()`: Parses command-line arguments
 - `find_unique_names(chai_dir, boltz_dir, config, quiet=False)`: Finds all unique directory names that exist in both CHAI and BOLTZ outputs
 - `sanitize_name(name)`: Sanitizes a name for use in PyMOL by replacing problematic characters
@@ -510,10 +559,12 @@ python combine_cif_files.py [--model-idx N] [--template TEMPLATE_FILE]
 - `main()`: Main function that orchestrates the process
 
 ### Output Files
+
 - PyMOL session files (.pse) for each unique name
 - CSV files with RMSD values
 
 ### Example Usage
+
 ```bash
 # Create PyMOL session files with default settings
 python combine_cif_files.py
@@ -530,21 +581,25 @@ python combine_cif_files.py --model-idx 0
 ## plot_rmsd_heatmap.py
 
 ### Purpose
+
 Generates a heatmap visualization of RMSD values.
 
 ### Functionality
+
 - Reads RMSD values from CSV files
 - Creates a heatmap with methods on the x-axis, ligand names on the y-axis, and RMSD values as cell values
 - Saves the heatmap as a PNG file
 - Saves the data to a CSV file for further analysis
 
 ### Command-line Arguments
+
 ```
 python plot_rmsd_heatmap.py [--input INPUT_CSV] [--output OUTPUT_PNG]
                            [--reference REFERENCE] [--quiet]
 ```
 
 ### Key Functions
+
 - `parse_arguments()`: Parses command-line arguments
 - `get_templates(config)`: Gets all template files from configuration
 - `find_rmsd_csv_files(pse_dir, template_name=None)`: Finds all rmsd_values.csv files in PSE_FILES subdirectories
@@ -554,10 +609,12 @@ python plot_rmsd_heatmap.py [--input INPUT_CSV] [--output OUTPUT_PNG]
 - `main()`: Main function that orchestrates the process
 
 ### Output Files
+
 - PNG file with the heatmap visualization
 - CSV file with the RMSD values
 
 ### Example Usage
+
 ```bash
 # Generate a heatmap with default settings
 python plot_rmsd_heatmap.py
@@ -577,9 +634,11 @@ python plot_rmsd_heatmap.py --reference KOr_w_momSalB
 ## plot_plddt_heatmap.py
 
 ### Purpose
+
 Generates a heatmap visualization of pLDDT (predicted local distance difference test) values.
 
 ### Functionality
+
 - Recursively searches through the subfolders within OUTPUT/CHAI and OUTPUT/BOLTZ to find all the JSON files containing pLDDT values
 - Extracts the complex_plddt values
 - Creates a heatmap visualization
@@ -587,12 +646,14 @@ Generates a heatmap visualization of pLDDT (predicted local distance difference 
 - Saves the data to a CSV file for further analysis
 
 ### Command-line Arguments
+
 ```
 python plot_plddt_heatmap.py [--chai-output CHAI_DIR] [--boltz-output BOLTZ_DIR]
                             [--output OUTPUT_PNG] [--quiet]
 ```
 
 ### Key Functions
+
 - `parse_arguments()`: Parses command-line arguments
 - `find_chai_json_files(root_dir, quiet=False)`: Finds all outs.json files in the CHAI output directory
 - `find_boltz_json_files(root_dir, quiet=False)`: Finds all confidence_*_model_0.json files in the BOLTZ output directory
@@ -605,10 +666,12 @@ python plot_plddt_heatmap.py [--chai-output CHAI_DIR] [--boltz-output BOLTZ_DIR]
 - `main()`: Main function that orchestrates the process
 
 ### Output Files
+
 - PNG file with the heatmap visualization
 - CSV file with the pLDDT values
 
 ### Example Usage
+
 ```bash
 # Generate a heatmap with default settings
 python plot_plddt_heatmap.py
@@ -625,9 +688,11 @@ python plot_plddt_heatmap.py --chai-output custom_chai --boltz-output custom_bol
 ## motif_alignment.py
 
 ### Purpose
+
 Performs motif-specific alignment and RMSD calculation.
 
 ### Functionality
+
 - Takes protein structures and motif definitions from the configuration
 - Extracts the specified motif regions (e.g., binding pockets, active sites)
 - Performs alignment on just those regions
@@ -636,12 +701,14 @@ Performs motif-specific alignment and RMSD calculation.
 - Supports both specific residue motifs and whole protein motifs
 
 ### Command-line Arguments
+
 ```
 python motif_alignment.py [--motif MOTIF_ID] [--template TEMPLATE_FILE]
                          [--model-idx N] [--quiet]
 ```
 
 ### Key Functions
+
 - `parse_arguments()`: Parses command-line arguments
 - `get_motif_definition(config, motif_id)`: Gets a motif definition by ID
 - `find_cif_files(motif_def, config, quiet=False)`: Finds all CIF files for the molecules in the motif definition
@@ -649,10 +716,12 @@ python motif_alignment.py [--motif MOTIF_ID] [--template TEMPLATE_FILE]
 - `main()`: Main function that orchestrates the process
 
 ### Output Files
+
 - PyMOL session files (.pse) for each motif
 - CSV files with motif-specific RMSD values
 
 ### Example Usage
+
 ```bash
 # Perform motif-specific alignment with default settings
 python motif_alignment.py --motif binding_pocket_hM1D
@@ -669,20 +738,24 @@ python motif_alignment.py --motif binding_pocket_hM1D --model-idx 0
 ## extract_motif_plddt.py
 
 ### Purpose
+
 Extracts pLDDT values for specific motifs.
 
 ### Functionality
+
 - Finds all JSON files with pLDDT values
 - Extracts pLDDT values for the specified motif residues
 - Calculates average pLDDT values for the motif regions
 - Supports both specific residue motifs and whole protein motifs
 
 ### Command-line Arguments
+
 ```
 python extract_motif_plddt.py [--motif MOTIF_ID] [--quiet]
 ```
 
 ### Key Functions
+
 - `parse_arguments()`: Parses command-line arguments
 - `get_motif_definition(config, motif_id)`: Gets a motif definition by ID
 - `find_json_files(motif_def, config, quiet=False)`: Finds all JSON files with pLDDT values for the molecules in the motif definition
@@ -690,9 +763,11 @@ python extract_motif_plddt.py [--motif MOTIF_ID] [--quiet]
 - `main()`: Main function that orchestrates the process
 
 ### Output Files
+
 - CSV files with motif-specific pLDDT values
 
 ### Example Usage
+
 ```bash
 # Extract motif-specific pLDDT values with default settings
 python extract_motif_plddt.py --motif binding_pocket_hM1D
@@ -703,20 +778,24 @@ python extract_motif_plddt.py --motif binding_pocket_hM1D
 ## plot_motif_rmsd.py
 
 ### Purpose
+
 Generates heatmap visualizations of motif-specific RMSD values.
 
 ### Functionality
+
 - Reads motif-specific RMSD values from CSV files
 - Creates a heatmap with methods on the x-axis, ligand names on the y-axis, and RMSD values as cell values
 - Saves the heatmap as a PNG file
 - Saves the data to a CSV file for further analysis
 
 ### Command-line Arguments
+
 ```
 python plot_motif_rmsd.py [--motif MOTIF_ID] [--quiet]
 ```
 
 ### Key Functions
+
 - `parse_arguments()`: Parses command-line arguments
 - `get_motif_definition(config, motif_id)`: Gets a motif definition by ID
 - `find_rmsd_csv_files(motif_id, quiet=False)`: Finds all rmsd_values.csv files for the specified motif

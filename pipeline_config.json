@@ -23,8 +23,7 @@
           "whole_protein": true,
           "chain": "A",
           "color": "cyan",
-          "template": "templates/hMD_template_8E9X.cif",
-          "model_idx": 4
+          "template": "templates/hMD_template_8E9X.cif"
         },
         {
           "id": "whole_protein_hM3D",
@@ -33,8 +32,7 @@
           "whole_protein": true,
           "chain": "A",
           "color": "cyan",
-          "template": "templates/hM3D_template_8E9W.cif",
-          "model_idx": 4
+          "template": "templates/hM3D_template_8E9W.cif"
         },
         {
           "id": "whole_protein_hM4D",
@@ -43,38 +41,37 @@
           "whole_protein": true,
           "chain": "A",
           "color": "cyan",
-          "template": "templates/hMD_template_8E9X.cif",
-          "model_idx": 4
+          "template": "templates/hMD_template_8E9X.cif"
         },
         {
           "id": "binding_pocket_hM1D",
           "description": "Ligand binding pocket residues for hM1Dshort_8E9X",
           "molecules": ["hM1Dshort_8E9X"],
-          "residues": [112, 113, 116, 117, 120, 164, 196, 199, 200, 203, 204, 413, 416, 417, 420, 439, 442, 443],
+          "residues": [85,86,89,90,93,137,169,172,173,176,177, 231, 234, 238, 235, 257, 260, 261],
+          "template_residues": [112, 113, 116, 117, 120, 164, 196, 199, 200, 203, 204, 413, 416, 417, 420, 439, 442, 443],
           "chain": "A",
           "color": "magenta",
-          "template": "templates/hMD_template_8E9X.cif",
-          "model_idx": 4
+          "template": "templates/hMD_template_8E9X.cif"
         },
         {
           "id": "binding_pocket_hM3D",
           "description": "Ligand binding pocket residues for hM3Dshort_8E9W",
           "molecules": ["hM3Dshort_8E9W"],
-          "residues": [125, 126, 129, 130, 133, 177, 209, 212, 213, 216, 217, 426, 429, 430, 433, 452, 455, 456],
+          "residues": [84,  85,  88,  89,  92, 136, 168, 171, 172, 175, 176, 228, 231, 232, 235, 254, 257, 258],
+          "template_residues": [112, 113, 116, 117, 120, 164, 196, 199, 200, 203, 204, 413, 416, 417, 420, 439, 442, 443],
           "chain": "A",
           "color": "magenta",
-          "template": "templates/hM3D_template_8E9W.cif",
-          "model_idx": 4
+          "template": "templates/hM3D_template_8E9W.cif"
         },
         {
           "id": "binding_pocket_hM4D",
           "description": "Ligand binding pocket residues for hM4Dshort_8E9X",
           "molecules": ["hM4Dshort_8E9X"],
-          "residues": [118, 119, 122, 123, 126, 170, 202, 205, 206, 209, 210, 419, 422, 423, 426, 445, 448, 449],
+          "residues": [84,  85,  88,  89,  92, 136, 168, 171, 172, 175, 176, 228, 231, 232, 235, 254, 257, 258],
+          "template_residues": [112, 113, 116, 117, 120, 164, 196, 199, 200, 203, 204, 413, 416, 417, 420, 439, 442, 443],
           "chain": "A",
           "color": "magenta",
-          "template": "templates/hMD_template_8E9X.cif",
-          "model_idx": 4
+          "template": "templates/hMD_template_8E9X.cif"
         }
       ]
     }

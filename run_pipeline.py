@@ -12,7 +12,7 @@ Usage:
     python run_pipeline.py [--config CONFIG_FILE] [--no-archive] [--delete-outputs] [--skip-step STEP]
                           [--use-chai] [--no-chai] [--use-boltz] [--no-boltz]
                           [--use-msa] [--no-msa] [--use-msa-dir]
-                          [--template TEMPLATE_FILE] [--model-idx N]
+                          [--template TEMPLATE_FILE]
                           [--prediction-runs PRED_IDS] [--analysis-runs ANALYSIS_IDS]
                           [--quiet]
 
@@ -31,7 +31,6 @@ Options:
     --no-msa              Do not use MSA for predictions
     --use-msa-dir         Use MSA directory (for CHAI)
     --template FILE       Template file (default: from config)
-    --model-idx N         Model index to search for (default: from config)
     --prediction-runs IDS Comma-separated list of prediction run IDs to run
     --analysis-runs IDS   Comma-separated list of analysis run IDs to run
     --quiet               Suppress detailed output
@@ -282,13 +281,11 @@ def run_whole_protein_analysis(config, args, state_file=None, state=None, run_id
     pipeline_steps = []
     
     # Add analysis steps with appropriate arguments
-    model_idx = config.get("templates", {}).get("model_idx", 4)  # Default to 4 if not found
     combine_cif_cmd = [
         "python", "src/combine_cif_files.py",
         f"--chai-output={config['directories']['chai_output']}",
         f"--boltz-output={config['directories']['boltz_output']}",
-        f"--pse-files={config['directories']['pse_files']}",
-        f"--model-idx={model_idx}"
+        f"--pse-files={config['directories']['pse_files']}"
     ]
     
     # Add template if specified in command line
@@ -416,8 +413,7 @@ def run_motif_analysis(config, args, state_file=None, state=None, run_id=None, m
         "python", "src/combine_cif_files.py",
         f"--chai-output={config['directories']['chai_output']}",
         f"--boltz-output={config['directories']['boltz_output']}",
-        f"--pse-files={analysis_run_dir}",  # Use the analysis run directory
-        f"--model-idx={motif_def.get('model_idx', config.get('model_idx', 4))}"
+        f"--pse-files={analysis_run_dir}"  # Use the analysis run directory
     ]
     
     # Add template if specified in motif definition
