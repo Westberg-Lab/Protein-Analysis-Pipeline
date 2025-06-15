@@ -18,12 +18,12 @@ archive_*/
 # Generated MSA files
 *.pqt
 
-# JSON files - ignore all except molecules.json
+# JSON files
 *.json
-!molecules_example.json
+!molecules.json
 !pipeline_config.json
 
-# CIF files - ignore all except reference files in root directory
+# CIF files
 *.cif
 
 # Python bytecode

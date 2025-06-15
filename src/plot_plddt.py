@@ -352,7 +352,8 @@ def create_plddt_heatmap(data, output_file, config, full_config=None, motif_id=N
     
     # If DataFrame has 'ligand', 'method', and 'plddt' columns, pivot it
     if all(col in df.columns for col in ['ligand', 'method', 'plddt']):
-        pivot_df = df.pivot(index='ligand', columns='method', values='plddt')
+        # Use pivot_table instead of pivot to handle duplicate entries by taking the mean
+        pivot_df = df.pivot_table(index='ligand', columns='method', values='plddt', aggfunc='mean')
     else:
         # Assume it's already in the right format
         pivot_df = df

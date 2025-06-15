@@ -223,16 +223,35 @@ def run_prediction_steps(config, args, state_file=None, state=None, run_id=None)
     
     # Only add BOLTZ steps if BOLTZ is enabled
     if config["methods"]["use_boltz"]:
+        # Determine unique output dir for YAMLs for this run
+        run_id = config.get("id", None)
+        if run_id:
+            import os
+            base_dir = config['directories']['boltz_yaml']  # Get base dir from config
+            boltz_yaml_dir = os.path.join(base_dir, run_id)  # Create subdirectory for this run
+        else:
+            boltz_yaml_dir = config['directories']['boltz_yaml']
+        
+        # Store the specific run directory for the boltz-run step
+        boltz_run_dir = boltz_yaml_dir
+
+        # Build boltz-yaml command
+        boltz_yaml_cmd = [
+            "python", "src/generate_boltz_yaml.py",
+            f"--output-dir={boltz_yaml_dir}"
+        ]
+        if config["methods"]["use_msa"]:
+            boltz_yaml_cmd.append("--use-msa")
         pipeline_steps.append({
             "id": "boltz-yaml",
-            "command": ["python", "src/generate_boltz_yaml.py"],
+            "command": boltz_yaml_cmd,
             "description": "Generating Boltz YAML files"
         })
         
         # Add BOLTZ run step with appropriate arguments
         boltz_run_cmd = [
             "python", "src/run_boltz_apptainer.py",
-            f"--input={config['directories']['boltz_yaml']}",
+            f"--input={boltz_run_dir}",
             f"--output={config['directories']['boltz_output']}"
         ]
         
@@ -670,15 +689,29 @@ def main():
     
     # Run each enabled prediction run
     prediction_success = True
+    
+    # Debug: Print all enabled prediction runs
+    print("Enabled prediction runs:")
+    for run in enabled_prediction_runs:
+        print(f"  - {run.get('id')}: {run.get('description')}, use_msa={run.get('methods', {}).get('use_msa', False)}")
+    
     for pred_run in enabled_prediction_runs:
         run_id = pred_run.get("id", "unknown")
-        log_message(f"Running prediction run: {run_id} - {pred_run.get('description', '')}", quiet=args.quiet)
+        use_msa = pred_run.get("methods", {}).get("use_msa", False)
+        log_message(f"Running prediction run: {run_id} - {pred_run.get('description', '')}, use_msa={use_msa}", quiet=args.quiet)
         
         # Merge global config with this prediction run
         merged_config = config_loader.deep_merge(full_config.get("global", {}), pred_run)
         
         # Update with command line arguments
         merged_config = config_loader.update_config_from_args(merged_config, args)
+        
+        # Ensure the run_id is set in the config
+        merged_config["id"] = run_id
+        
+        # Debug: Print merged config methods
+        print(f"Merged config for {run_id}:")
+        print(f"  - use_msa: {merged_config.get('methods', {}).get('use_msa', False)}")
         
         # Run the prediction steps with this prediction run
         if not run_prediction_steps(merged_config, args, state_file, state, run_id):

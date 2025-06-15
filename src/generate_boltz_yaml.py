@@ -13,6 +13,9 @@ def generate_yaml_files(output_base_dir="BOLTZ_YAML", use_msa=False):
     """Generate YAML files for combinations following Boltz-1 schema."""
     molecule_1, molecule_2 = load_molecules()
     
+    # Ensure the output base directory exists
+    os.makedirs(output_base_dir, exist_ok=True)
+    
     for mol1 in molecule_1:
         if not mol1:
             continue
@@ -27,9 +30,10 @@ def generate_yaml_files(output_base_dir="BOLTZ_YAML", use_msa=False):
             
             # Add first molecule (always first letter)
             if mol1_type == "protein":
-                entity = {"protein": {"id": "A", "sequence": mol1_seq}}
-                # Add MSA field
-                entity["protein"]["msa"] = "empty"  # Use empty for explicit single sequence mode
+                entity_protein_data = {"id": "A", "sequence": mol1_seq}
+                if not use_msa:
+                    entity_protein_data["msa"] = "empty"
+                entity = {"protein": entity_protein_data}
             else:  # ligand
                 entity = {"ligand": {"id": "A", "smiles": mol1_seq}}
             ENTITY_LIST.append(entity)
@@ -41,9 +45,10 @@ def generate_yaml_files(output_base_dir="BOLTZ_YAML", use_msa=False):
                 mol2_type, mol2_name, mol2_seq = mol2
                 # Add second molecule (always second letter)
                 if mol2_type == "protein":
-                    entity = {"protein": {"id": "B", "sequence": mol2_seq}}
-                    # Add MSA field
-                    entity["protein"]["msa"] = "empty"  # Use empty for explicit single sequence mode
+                    entity_protein_data = {"id": "B", "sequence": mol2_seq}
+                    if not use_msa:
+                        entity_protein_data["msa"] = "empty"
+                    entity = {"protein": entity_protein_data}
                 else:  # ligand
                     entity = {"ligand": {"id": "B", "smiles": mol2_seq}}
                 ENTITY_LIST.append(entity)
@@ -56,6 +61,10 @@ def generate_yaml_files(output_base_dir="BOLTZ_YAML", use_msa=False):
                 yaml.dump(yaml_data, f, default_flow_style=False, sort_keys=False)
 
 if __name__ == "__main__":
-    # Ask user if they want to use MSA
-    generate_yaml_files()
+    import argparse
+    parser = argparse.ArgumentParser(description="Generate Boltz YAML files.")
+    parser.add_argument("--use-msa", action="store_true", help="Exclude msa field for proteins (for MSA runs)")
+    parser.add_argument("--output-dir", type=str, default="BOLTZ_YAML", help="Output base directory for YAML files")
+    args = parser.parse_args()
+    generate_yaml_files(output_base_dir=args.output_dir, use_msa=args.use_msa)
     print("YAML files generated successfully!")
